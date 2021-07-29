@@ -1,0 +1,7 @@
+data/
+intermediate/
+reports/
+databases/
+work/
+*.log*
+.nextflow/
