@@ -41,7 +41,7 @@ process fastqc_run {
     tuple val(sample_id), file(reads_file) from fastqc_reads
 
     output:
-    file '*' into multiqc_ch
+    file '*.zip' into multiqc_ch
 
     script:
     """
@@ -55,7 +55,7 @@ process multiqc {
     cpus 1
 
     input:
-    path '*.zip' from multiqc_ch.collect()
+    path '*' from multiqc_ch.collect()
 
     output:
     path 'multiqc_report.html'
