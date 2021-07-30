@@ -53,7 +53,6 @@ process multiqc {
     publishDir "$params.outdir/multiqc/", mode: 'copy'
     container 'ewels/multiqc:latest'
     cpus 1
-    memory '512 MB'
 
     input:
     path '*.zip' from multiqc_ch.collect()
