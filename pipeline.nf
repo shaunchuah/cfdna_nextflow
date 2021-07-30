@@ -56,7 +56,7 @@ process multiqc {
     memory '512 MB'
 
     input:
-    path '*' from multiqc_ch.collect()
+    path '*.zip' from multiqc_ch.collect()
 
     output:
     path 'multiqc_report.html'
