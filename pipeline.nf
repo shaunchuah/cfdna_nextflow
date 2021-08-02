@@ -81,10 +81,64 @@ process bwa_mem {
     file reference_genome_index from human_genome_index_ch
 
     output:
-    file '*.sam' into aligned_ch
+    tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch
 
     script:
     """
     bwa mem -t ${task.cpus} ${reference_genome_index}/genome.fa ${reads_file[0]} ${reads_file[1]} > ${sample_id}.sam 
     """
+}
+
+process samtools_flagstat {
+    publishDir "$params.outdir/samtools_flagstat/"
+    container 'biocontainers/samtools:v1.9-4-deb_cv1'
+    cpus 1
+    tag "$sample_id"
+
+    input:
+    tuple val(sample_id), file(sam_file) from stats_ch
+
+    output:
+    path "${sample_id}_flagstat.txt"
+
+    script:
+    """
+    samtools flagstat $sam_file > ${sample_id}_flagstat.txt
+    """
+}
+
+process get_unmapped_reads {
+    publishDir "$params.outdir/temp/"
+    container 'biocontainers/samtools:v1.9-4-deb_cv1'
+    cpus 1
+    tag "$sample_id"
+
+    input:
+    tuple val(sample_id), file(sam_file) from aligned_ch
+
+    output:
+    tuple val(sample_id), path("${sample_id}_unmapped_reads.fastq") into metaphlan_ch
+
+    script:
+    """
+    samtools view -bf 4 $sam_file | samtools fastq - > ${sample_id}_unmapped_reads.fastq
+    """
+}
+
+process run_metaphlan {
+    publishDir "$params.outdir/metaphlan/"
+    container 'biobakery/metaphlan:3.0.7'
+    cpus 2
+    tag "$sample_id - metaphlan"
+    
+    input:
+    tuple val(sample_id), file(unmapped_fastq) from metaphlan_ch
+
+    output:
+    path "${sample_id}_metaphlan_profile.txt"
+
+    script:
+    """
+    metaphlan $unmapped_fastq --index latest --nproc ${task.cpus} --input_type fastq -o ${sample_id}_metaphlan_profile.txt
+    """ 
 }
