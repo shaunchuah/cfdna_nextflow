@@ -17,6 +17,10 @@ params.reads = "$baseDir/data/*/*_{R1,R2}_*.fastq.gz"
 // Report Directory
 params.outdir = 'reports'
 
+// Reference Genomes
+params.human_genome_index = "s3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/BWAIndex/"
+human_genome_index_ch = Channel.value(file("${params.human_genome_index}"))
+
 println """\
          ===================================
          C F D N A - N F   P I P E L I N E    
@@ -36,7 +40,7 @@ process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
     container 'biocontainers/fastqc:v0.11.9_cv8'
     tag "$sample_id - FastQC"
-    cpus 2
+    cpus 4
 
     input:
     tuple val(sample_id), file(reads_file) from fastqc_reads
@@ -64,5 +68,23 @@ process multiqc {
     script:
     """
     multiqc .
+    """
+}
+
+process bwa_mem {
+    publishDir "$params.outdir/bwa/"
+    container 'biocontainers/bwa:v0.7.17_cv1'
+    cpus 4
+
+    input:
+    tuple val(sample_id), file(reads_file) from reads_for_alignment
+    file reference_genome_index from human_genome_index_ch
+
+    output:
+    file '*.sam' into aligned_ch
+
+    script:
+    """
+    bwa mem -t ${task.cpus} ${reference_genome_index}/genome.fa ${reads_file[0]} ${reads_file[1]} > ${sample_id}.sam 
     """
 }
