@@ -40,7 +40,7 @@ process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
     container 'biocontainers/fastqc:v0.11.9_cv8'
     tag "$sample_id - FastQC"
-    cpus 4
+    cpus 1
 
     input:
     tuple val(sample_id), file(reads_file) from fastqc_reads
