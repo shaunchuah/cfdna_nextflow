@@ -40,13 +40,13 @@ process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
     container 'biocontainers/fastqc:v0.11.9_cv8'
     tag "$sample_id - FastQC"
-    cpus 4
+    cpus 1
 
     input:
     tuple val(sample_id), file(reads_file) from fastqc_reads
 
     output:
-    file '*.zip' into multiqc_ch
+    file "*_fastqc.{zip,html}" into fastqc_results
 
     script:
     """
@@ -54,27 +54,30 @@ process fastqc_run {
     """
 }
 
+/*
 process multiqc {
     publishDir "$params.outdir/multiqc/", mode: 'copy'
-    container 'ewels/multiqc:latest'
-    cpus 1
+    container 'ewels/multiqc:v1.11'
 
     input:
-    path '*' from multiqc_ch.collect()
+    file ('fastqc/*') from fastqc_results.collect().ifEmpty([])
 
     output:
-    path 'multiqc_report.html'
+    file "multiqc_report.html" into multiqc_report
+    file "multiqc_data"
 
     script:
     """
     multiqc .
     """
 }
+*/
 
 process bwa_mem {
     publishDir "$params.outdir/bwa/"
     container 'biocontainers/bwa:v0.7.17_cv1'
     cpus 4
+    memory '16 GB'
 
     input:
     tuple val(sample_id), file(reads_file) from reads_for_alignment
@@ -128,7 +131,7 @@ process get_unmapped_reads {
 process run_metaphlan {
     publishDir "$params.outdir/metaphlan/"
     container 'biobakery/metaphlan:3.0.7'
-    cpus 2
+    cpus 4
     tag "$sample_id - metaphlan"
     
     input:
