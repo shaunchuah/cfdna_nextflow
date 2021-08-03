@@ -18,8 +18,9 @@ params.reads = "$baseDir/data/*/*_{R1,R2}_*.fastq.gz"
 params.outdir = 'reports'
 
 // Reference Genomes
-params.human_genome_index = "s3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/BWAIndex/"
-human_genome_index_ch = Channel.value(file("${params.human_genome_index}"))
+params.human_genome_reference = "s3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/WholeGenomeFasta/"
+human_genome_reference_ch = Channel.value(file("${params.human_genome_reference}"))
+params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/GRCh38_bowtie2"
 
 println """\
          ===================================
@@ -73,6 +74,7 @@ process multiqc {
 }
 */
 
+/*
 process bwa_mem {
     publishDir "$params.outdir/bwa/"
     container 'biocontainers/bwa:v0.7.17_cv1'
@@ -81,14 +83,34 @@ process bwa_mem {
 
     input:
     tuple val(sample_id), file(reads_file) from reads_for_alignment
-    file reference_genome_index from human_genome_index_ch
+    file reference_genome from human_genome_reference_ch
 
     output:
     tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch
 
     script:
     """
-    bwa mem -t ${task.cpus} ${reference_genome_index}/genome.fa ${reads_file[0]} ${reads_file[1]} > ${sample_id}.sam 
+    bwa index ${reference_genome}/genome.fa
+    bwa mem -t ${task.cpus} ${reference_genome}/genome.fa ${reads_file[0]} ${reads_file[1]} > ${sample_id}.sam 
+    """
+}
+*/
+
+process bowtie2 {
+    publishDir "$params.outdir/bowtie2/"
+    container 'biocontainers/bowtie2:v2.4.1_cv1'
+    cpus 4
+    memory '16 GB'
+
+    input:
+    tuple val(sample_id), file(reads_file) from reads_for_alignment
+
+    output:
+    tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch
+
+    script:
+    """
+    bowtie2 -t -p ${task.cpus} -x ${params.bowtie2_reference_index} -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
     """
 }
 

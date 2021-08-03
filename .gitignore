@@ -5,3 +5,4 @@ work/
 *.log*
 .nextflow/
 credentials.json
+reference_db/
