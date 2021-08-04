@@ -1,5 +1,11 @@
 # Nextflow pipeline for cfDNA analysis
 
+Welcome to this Nextflow pipeline for cfDNA analysis. After much trial and error, I have had the greatest overall success getting this pipeline up and running with Azure Batch.
+
+For context, I develop this pipeline locally on my desktop machine (Core i5 6600K - 4 cores + 16GB RAM) running ubuntu 20.04 + Docker.
+Then I have the same test data in Azure storage and I check that the pipeline orchestrates well in the cloud.
+Finally I upload the real data and switch the directories to the real input and output directories and let it run.
+
 Test illumina data included for pipeline development in /data folder credits to https://github.com/hartwigmedical/testdata  
 
 ## Installation
@@ -24,50 +30,52 @@ Quick settings overview (full settings in nextflow.config file):
 
 ```
 profiles {
-
     standard {
         process.executor = 'local'
+        azure {
+            storage {
+                accountName = azure_config["storageAccountName"]
+                accountKey = azure_config["storageAccountKey"]
+            }
+        }
     }
-
-
-    gls {
-        params.reads = 'gs://scgenomics/data/*/*_{R1,R2}_*.fastq.gz'
-        params.outdir = 'gs://scgenomics/reports/'
-        process.executor = 'google-lifesciences'
-        workDir = 'gs://scgenomics/work'
-        google.location = 'europe-west2'
-        google.region  = 'europe-west2'
-        google.project = 'nextflow-321415'
-        google.lifeSciences.preemptible = true
-        process.errorStrategy = { task.exitStatus==14 ? 'retry' : 'terminate' }
-        process.maxRetries = 3
-    }
-
     az {
         params.reads = 'az://scgenomics/test_data/*/*_{R1,R2}_*.fastq.gz'
         params.outdir = 'az://scgenomics/test_reports'
+        params.bowtie2_reference_index = "az://scgenomics/bt2_index.tar.gz"
         process.executor = 'azurebatch'
         workDir = 'az://scgenomics/work/'
         azure {
             storage {
-                accountName = "<account name here>"
-                accountKey = "<account key here>"
+                accountName = azure_config["storageAccountName"]
+                accountKey = azure_config["storageAccountKey"]
             }
             batch {
                 location = 'uksouth'
-                accountName = '<account name here>'
-                accountKey = '<account key here>'
+                accountName = azure_config["batchAccountName"]
+                accountKey = azure_config["batchAccountKey"]
                 autoPoolMode = true
-                deletePoolsOnCompletion = true
+                pools {
+                    auto {
+                        vmType = 'Standard_D4_v3'
+                        vmCount = 4
+                        maxVmCount = 12
+                        autoScale = true
+                    }
+                }
             }
-        }    
-
+        }
     }
+}
 ```
+
+
 
 ## Main Architectural Concept
 
-Develop and test pipeline with test data locally then orchestrate your cloud execution from your local machine. You will need to let your local machine run until all execution in the cloud is finished.
+Develop and test pipeline with test data locally then orchestrate your cloud execution from your local machine. You will need to let your local machine run until all execution in the cloud is finished. 
+
+To take this to the next level, you may consider deploying a VM in the cloud as the head server for true portability but that is beyond the scope of this pipeline tutorial.
 
 All bioinformatic tools in docker containers. Nextflow handles the start and stopping of containers automatically. You may need to run Docker pull manually on your local machine but all cloud container orchestration will be handled automatically by GCP or Azure.
 
@@ -116,9 +124,34 @@ Azure is slightly more complicated in terms of bucket/container set up. Note azu
 
 AWS is the most difficult because you need to create a custom Amazon Machine Image for the EC2 instances that can execute the awscli. This proved to be impossible as I ran into errors and troubleshooting was pretty much a nightmare and I did not succeed in the end.
 
+** Addendum 05/08/2021:
+
+- Turns out it is easier to get a higher vCPU quota on Azure than GCP (minutes vs days)
+- Note for reference databases in azure, you need to place **files at the root of the container**. Azure doesn't work well with subdirectories and a folder of files. I zipped them up in a .tar.gz and unzipped the reference folders in the process. Took me 2 days to figure out.
+
+
+
+### Azure Cloud Execution
+
+Slightly easier nextflow setup but setting up the azure services is slightly less user-friendly as Azure Portal is quite overwhelming compared to Google Cloud Console.
+
+#### 1. Set azure credentials
+
+Open up nextflow.config and edit the path variables.
+Copy sample_credentials.json to a file named 'credentials.json' in the root of this repository and add your details there.
+
+## Pipeline Credentials
+
+Azure credentials stored and read from credentials.json. Copy sample_credentials.json to a file named 'credentials.json' in the root of this repo and fill in your Azure login details. This helps split sensitive variables out of the git repository/nextflow config file.
+
+#### 2. Running the pipeline
+```
+nextflow pipeline.nf -resume -profile az
+```
+
 ### Google Cloud Execution
 
-
+This is for reference here.
 Basic tutorial here: https://cloud.google.com/life-sciences/docs/tutorials/nextflow
 
 * To edit cloud configuration open nextflow.config and edit the desired settings under the profile section
@@ -135,17 +168,4 @@ Tip: Consider adding the above environment variables to the .bashrc file
 #### 2. Running the pipeline
 ```
 nextflow pipeline.nf -resume -profile gls
-```
-
-### Azure Cloud Execution
-
-Slightly easier nextflow setup but setting up the azure services is slightly less user-friendly as Azure Portal is quite overwhelming compared to Google Cloud Console.
-
-#### 1. Set azure credentials
-
-Open up nextflow.config and fill in the storage and batch account names and keys.
-
-#### 2. Running the pipeline
-```
-nextflow pipeline.nf -resume -profile az
 ```
