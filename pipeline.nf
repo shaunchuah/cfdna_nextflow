@@ -6,7 +6,9 @@ PIPELINE INSTRUCTIONS HERE
 This pipeline has been constructured for illumina sequencing reads
 Sample Folder structure <path for reads here>/<sample_id>/<contains fastq.gz read1 and read2>
 
-nextflow run pipeline.nf --reads <s3 path to reads folder> --outdir <s3 path to reports folder>
+nextflow run pipeline.nf --reads <s3/az/gc path to reads folder> --outdir <s3/az/gc path to reports folder>
+alternatively open up the config for the profiles and you can run
+nextflow run pipeline.nf -resume -profile az
 */
 
 // PIPELINE PARAMETERS HERE
@@ -18,9 +20,17 @@ params.reads = "$baseDir/data/*/*_{R1,R2}_*.fastq.gz"
 params.outdir = 'reports'
 
 // Reference Genomes
-params.human_genome_reference = "s3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/WholeGenomeFasta/"
-human_genome_reference_ch = Channel.value(file("${params.human_genome_reference}"))
-params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/GRCh38_bowtie2"
+params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
+bowtie2_db_ch = Channel.value(file("${params.bowtie2_reference_index}"))
+/* 
+Top tip: For azure storage - it does not support folders.
+You have to put the file directly in the root of the container otherwise azure throws errors.
+So I have zipped up the bowtie2 reference index and placed it at az://<container>/<tar.gz bowtie2 index>
+*/
+
+
+
+params.kraken2_fulldb = "s3://genome-idx/kraken/k2_standard_20210517.tar.gz"
 
 println """\
          ===================================
@@ -30,6 +40,11 @@ println """\
          -----------------------------------
          reads        : ${params.reads}
          outdir       : ${params.outdir}
+         -----------------------------------
+         PIPELINE REFERENCE DATABASES
+         -----------------------------------
+         bowtie2 db   : ${params.bowtie2_reference_index}
+         kraken2 db   : ${params.kraken2_fulldb}
          """
          .stripIndent()
 
@@ -104,13 +119,15 @@ process bowtie2 {
 
     input:
     tuple val(sample_id), file(reads_file) from reads_for_alignment
+    file db from bowtie2_db_ch
 
     output:
     tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch
 
     script:
     """
-    bowtie2 -t -p ${task.cpus} -x ${params.bowtie2_reference_index} -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
+    tar -xvf $db
+    bowtie2 -t -p ${task.cpus} -x bowtie2/GRCh38_bowtie2 -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
     """
 }
 
@@ -133,7 +150,6 @@ process samtools_flagstat {
 }
 
 process get_unmapped_reads {
-    publishDir "$params.outdir/temp/"
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
     cpus 1
     tag "$sample_id"
