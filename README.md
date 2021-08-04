@@ -135,12 +135,11 @@ AWS is the most difficult because you need to create a custom Amazon Machine Ima
 
 Slightly easier nextflow setup but setting up the azure services is slightly less user-friendly as Azure Portal is quite overwhelming compared to Google Cloud Console.
 
-#### 1. Set azure credentials
+#### 1. Set azure settings
 
 Open up nextflow.config and edit the path variables.
-Copy sample_credentials.json to a file named 'credentials.json' in the root of this repository and add your details there.
 
-## Pipeline Credentials
+#### Pipeline Credentials
 
 Azure credentials stored and read from credentials.json. Copy sample_credentials.json to a file named 'credentials.json' in the root of this repo and fill in your Azure login details. This helps split sensitive variables out of the git repository/nextflow config file.
 
