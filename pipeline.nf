@@ -28,9 +28,11 @@ You have to put the file directly in the root of the container otherwise azure t
 So I have zipped up the bowtie2 reference index and placed it at az://<container>/<tar.gz bowtie2 index>
 */
 
-
-
-params.kraken2_fulldb = "s3://genome-idx/kraken/k2_standard_20210517.tar.gz"
+// Kraken2 Database
+// By default, the full database is linked here which requires 64GB of RAM
+// URL for the 8GB DB = "s3://genome-idx/kraken/k2_standard_8gb_20210517.tar.gz"
+params.kraken2_db = "s3://genome-idx/kraken/k2_standard_20210517.tar.gz"
+kraken2_db_ch = Channel.value(file("${params.kraken2_db}"))
 
 println """\
          ===================================
@@ -44,7 +46,7 @@ println """\
          PIPELINE REFERENCE DATABASES
          -----------------------------------
          bowtie2 db   : ${params.bowtie2_reference_index}
-         kraken2 db   : ${params.kraken2_fulldb}
+         kraken2 db   : ${params.kraken2_db}
          """
          .stripIndent()
 
@@ -56,7 +58,7 @@ process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
     container 'biocontainers/fastqc:v0.11.9_cv8'
     tag "$sample_id - FastQC"
-    cpus 8
+    cpus 16
 
     input:
     tuple val(sample_id), file(reads_file) from fastqc_reads
@@ -112,9 +114,8 @@ process bwa_mem {
 */
 
 process bowtie2 {
-    publishDir "$params.outdir/bowtie2/"
     container 'biocontainers/bowtie2:v2.4.1_cv1'
-    cpus 8
+    cpus 16
 
     input:
     tuple val(sample_id), file(reads_file) from reads_for_alignment
@@ -133,7 +134,7 @@ process bowtie2 {
 process samtools_flagstat {
     publishDir "$params.outdir/samtools_flagstat/"
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
-    cpus 8
+    cpus 16
     tag "$sample_id"
 
     input:
@@ -150,14 +151,14 @@ process samtools_flagstat {
 
 process get_unmapped_reads {
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
-    cpus 8
+    cpus 16
     tag "$sample_id"
 
     input:
     tuple val(sample_id), file(sam_file) from aligned_ch
 
     output:
-    tuple val(sample_id), path("${sample_id}_unmapped_reads.fastq") into metaphlan_ch
+    tuple val(sample_id), path("${sample_id}_unmapped_reads.fastq") into metaphlan_ch, kraken2_ch
 
     script:
     """
@@ -168,7 +169,7 @@ process get_unmapped_reads {
 process run_metaphlan {
     publishDir "$params.outdir/metaphlan/"
     container 'biobakery/metaphlan:3.0.7'
-    cpus 8
+    cpus 16
     tag "$sample_id - metaphlan"
     
     input:
@@ -181,4 +182,31 @@ process run_metaphlan {
     """
     metaphlan $unmapped_fastq --index latest --nproc ${task.cpus} --input_type fastq -o ${sample_id}_metaphlan_profile.txt
     """ 
+}
+
+process run_kraken2 {
+    publishDir "$params.outdir/kraken2/"
+    container 'staphb/kraken2:2.1.2-no-db'
+    cpus 16
+    tag "$sample_id - kraken2"
+
+    input:
+    tuple val(sample_id), file(unmapped_fastq) from kraken2_ch
+    file kraken2_db from kraken2_db_ch
+
+    output:
+    file '*_kraken2report.txt'
+    file '*_kraken2output.txt'
+
+    script:
+    """
+    tar -xvf $kraken2_db
+    kraken2 \
+        --db . \
+        --report ${sample_id}_kraken2report.txt \
+        --output ${sample_id}_kraken2output.txt \
+        --use-names \
+        --threads ${task.cpus} \
+        $unmapped_fastq
+    """
 }
