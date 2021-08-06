@@ -56,7 +56,7 @@ process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
     container 'biocontainers/fastqc:v0.11.9_cv8'
     tag "$sample_id - FastQC"
-    cpus 1
+    cpus 8
 
     input:
     tuple val(sample_id), file(reads_file) from fastqc_reads
@@ -114,8 +114,7 @@ process bwa_mem {
 process bowtie2 {
     publishDir "$params.outdir/bowtie2/"
     container 'biocontainers/bowtie2:v2.4.1_cv1'
-    cpus 4
-    memory '16 GB'
+    cpus 8
 
     input:
     tuple val(sample_id), file(reads_file) from reads_for_alignment
@@ -134,7 +133,7 @@ process bowtie2 {
 process samtools_flagstat {
     publishDir "$params.outdir/samtools_flagstat/"
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
-    cpus 1
+    cpus 8
     tag "$sample_id"
 
     input:
@@ -145,13 +144,13 @@ process samtools_flagstat {
 
     script:
     """
-    samtools flagstat $sam_file > ${sample_id}_flagstat.txt
+    samtools flagstat -@ ${task.cpus} $sam_file > ${sample_id}_flagstat.txt
     """
 }
 
 process get_unmapped_reads {
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
-    cpus 1
+    cpus 8
     tag "$sample_id"
 
     input:
@@ -162,14 +161,14 @@ process get_unmapped_reads {
 
     script:
     """
-    samtools view -bf 4 $sam_file | samtools fastq - > ${sample_id}_unmapped_reads.fastq
+    samtools view -@ ${task.cpus} -bf 4 $sam_file | samtools fastq -@ ${task.cpus} - > ${sample_id}_unmapped_reads.fastq
     """
 }
 
 process run_metaphlan {
     publishDir "$params.outdir/metaphlan/"
     container 'biobakery/metaphlan:3.0.7'
-    cpus 4
+    cpus 8
     tag "$sample_id - metaphlan"
     
     input:
