@@ -9,6 +9,10 @@ Sample Folder structure <path for reads here>/<sample_id>/<contains fastq.gz rea
 nextflow run pipeline.nf --reads <s3/az/gc path to reads folder> --outdir <s3/az/gc path to reports folder>
 alternatively open up the config for the profiles and you can run
 nextflow run pipeline.nf -resume -profile az
+
+Azure VM Reference:
+Standard_E8a_v4 8cpus 64gb ram
+Standard_D16_v3 16cpus 64gb ram
 */
 
 // PIPELINE PARAMETERS HERE
