@@ -32,11 +32,17 @@ You have to put the file directly in the root of the container otherwise azure t
 So I have zipped up the bowtie2 reference index and placed it at az://<container>/<tar.gz bowtie2 index>
 */
 
+// CPU configuration
+params.cpus = 4
+
 // Kraken2 Database
 // By default, the full database is linked here which requires 64GB of RAM
 // URL for the 8GB DB = "s3://genome-idx/kraken/k2_standard_8gb_20210517.tar.gz"
-params.kraken2_db = "s3://genome-idx/kraken/k2_standard_20210517.tar.gz"
+params.kraken2_db = "$baseDir/reference_db/k2_standard_16gb_20201202.tar.gz"
 kraken2_db_ch = Channel.value(file("${params.kraken2_db}"))
+
+params.metaphlan_db = "$baseDir/reference_db/metaphlan_db.tar.gz"
+metaphlan_db_ch = Channel.value(file("${params.metaphlan_db}"))
 
 println """\
          ===================================
@@ -51,6 +57,7 @@ println """\
          -----------------------------------
          bowtie2 db   : ${params.bowtie2_reference_index}
          kraken2 db   : ${params.kraken2_db}
+         metaphlan_db : ${params.metaphlan_db}
          """
          .stripIndent()
 
@@ -62,7 +69,7 @@ process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
     container 'biocontainers/fastqc:v0.11.9_cv8'
     tag "$sample_id - FastQC"
-    cpus 16
+    cpus "$params.cpus".toInteger()
 
     input:
     tuple val(sample_id), file(reads_file) from fastqc_reads
@@ -76,50 +83,9 @@ process fastqc_run {
     """
 }
 
-/*
-process multiqc {
-    publishDir "$params.outdir/multiqc/", mode: 'copy'
-    container 'ewels/multiqc:v1.11'
-
-    input:
-    file ('fastqc/*') from fastqc_results.collect().ifEmpty([])
-
-    output:
-    file "multiqc_report.html" into multiqc_report
-    file "multiqc_data"
-
-    script:
-    """
-    multiqc .
-    """
-}
-*/
-
-/*
-process bwa_mem {
-    publishDir "$params.outdir/bwa/"
-    container 'biocontainers/bwa:v0.7.17_cv1'
-    cpus 4
-    memory '16 GB'
-
-    input:
-    tuple val(sample_id), file(reads_file) from reads_for_alignment
-    file reference_genome from human_genome_reference_ch
-
-    output:
-    tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch
-
-    script:
-    """
-    bwa index ${reference_genome}/genome.fa
-    bwa mem -t ${task.cpus} ${reference_genome}/genome.fa ${reads_file[0]} ${reads_file[1]} > ${sample_id}.sam 
-    """
-}
-*/
-
 process bowtie2 {
     container 'biocontainers/bowtie2:v2.4.1_cv1'
-    cpus 16
+    cpus "$params.cpus".toInteger()
 
     input:
     tuple val(sample_id), file(reads_file) from reads_for_alignment
@@ -138,7 +104,7 @@ process bowtie2 {
 process samtools_flagstat {
     publishDir "$params.outdir/samtools_flagstat/"
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
-    cpus 16
+    cpus "$params.cpus".toInteger()
     tag "$sample_id"
 
     input:
@@ -155,7 +121,7 @@ process samtools_flagstat {
 
 process get_unmapped_reads {
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
-    cpus 16
+    cpus "$params.cpus".toInteger()
     tag "$sample_id"
 
     input:
@@ -171,27 +137,34 @@ process get_unmapped_reads {
 }
 
 process run_metaphlan {
-    publishDir "$params.outdir/metaphlan/"
+    publishDir "$params.outdir/metaphlan/", mode: 'copy'
     container 'biobakery/metaphlan:3.0.7'
-    cpus 16
+    cpus "$params.cpus".toInteger()
     tag "$sample_id - metaphlan"
     
     input:
     tuple val(sample_id), file(unmapped_fastq) from metaphlan_ch
+    file metaphlan_db from metaphlan_db_ch
 
     output:
     path "${sample_id}_metaphlan_profile.txt"
 
     script:
     """
-    metaphlan $unmapped_fastq --index latest --nproc ${task.cpus} --input_type fastq -o ${sample_id}_metaphlan_profile.txt
+    tar -xvf $metaphlan_db
+    metaphlan $unmapped_fastq \
+        --bowtie2db metaphlan_db/ \
+        -x mpa_v30_CHOCOPhlAn_201901 \
+        --nproc ${task.cpus} \
+        --input_type fastq \
+        -o ${sample_id}_metaphlan_profile.txt
     """ 
 }
 
 process run_kraken2 {
     publishDir "$params.outdir/kraken2/"
     container 'staphb/kraken2:2.1.2-no-db'
-    cpus 16
+    cpus "$params.cpus".toInteger()
     tag "$sample_id - kraken2"
 
     input:
