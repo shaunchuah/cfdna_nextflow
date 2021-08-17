@@ -92,12 +92,42 @@ process bowtie2 {
     file db from bowtie2_db_ch
 
     output:
-    tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch
+    tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch, chrM_ch
 
     script:
     """
     tar -xvf $db
     bowtie2 -t -p ${task.cpus} -x bowtie2/GRCh38_bowtie2 -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
+    """
+}
+
+process samtools_chrM {
+    publishDir "$params.outdir/samtools_chrM/", mode: 'copy', pattern: "*_chrM.txt"
+    publishDir "$params.outdir/samtools_idxstats/", mode: 'copy', pattern: "*_idxstats.tsv"
+    container 'biocontainers/samtools:v1.9-4-deb_cv1'
+    cpus "$params.cpus".toInteger()
+    tag "$sample_id"
+
+    input:
+    tuple val(sample_id), file(sam_file) from chrM_ch
+
+    output:
+    path "${sample_id}_chrM.txt"
+    path "${sample_id}_idxstats.tsv"
+
+    script:
+    """
+    samtools view -@ ${task.cpus} -S -b $sam_file | samtools sort - > temp.bam
+    samtools index -@ ${task.cpus} temp.bam
+
+    echo "${sample_id} - Total Reads vs Mitochondrial Reads" > ${sample_id}_chrM.txt
+    echo "Total Reads:" >> ${sample_id}_chrM.txt
+    samtools view -@ ${task.cpus} -c temp.bam >> ${sample_id}_chrM.txt
+
+    echo "Mitochondrial Reads:" >> ${sample_id}_chrM.txt
+    samtools view -@ ${task.cpus} -c temp.bam chrM >> ${sample_id}_chrM.txt
+
+    samtools idxstats -@ ${task.cpus} temp.bam > ${sample_id}_idxstats.tsv
     """
 }
 
@@ -162,7 +192,8 @@ process run_metaphlan {
 }
 
 process run_kraken2 {
-    publishDir "$params.outdir/kraken2/"
+    publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: "*_kraken2report.txt"
+    publishDir "$params.outdir/kraken2/output/", pattern: "*_kraken2output.txt"
     container 'staphb/kraken2:2.1.2-no-db'
     cpus "$params.cpus".toInteger()
     tag "$sample_id - kraken2"
