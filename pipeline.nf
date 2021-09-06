@@ -62,7 +62,7 @@ println """\
          .stripIndent()
 
 reads = Channel.fromFilePairs(params.reads)
-reads.into { fastqc_reads; reads_for_alignment }
+reads.into { fastqc_reads; reads_for_alignment; reads_for_cpgiscan }
 
 
 process fastqc_run {
@@ -80,6 +80,24 @@ process fastqc_run {
     script:
     """
     fastqc $reads_file -o . --threads ${task.cpus}
+    """
+}
+
+process cpgiscan {
+    publishDir "$params.outdir/cpgiscan/", mode: 'copy'
+    container 'shaunchuah/cpgiscan'
+    tag "$sample_id - CpGIScan"
+
+    input:
+    tuple val(sample_id), file(reads_file) from reads_for_cpgiscan
+
+    output:
+    file "${sample_id}_cpgiscan.txt"
+
+    script:
+    """
+    gunzip -c ${reads_file[0]} > ${sample_id}.fastq
+    cpgiscan -G ${sample_id}_cpgiscan.txt ${sample_id}.fastq
     """
 }
 
