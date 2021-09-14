@@ -241,7 +241,7 @@ process run_kraken2 {
     file kraken2_db from kraken2_db_ch
 
     output:
-    file '*_kraken2report.txt'
+    file '*_kraken2report.txt' into kraken_biom_ch
     file '*_kraken2output.txt'
 
     script:
@@ -254,5 +254,21 @@ process run_kraken2 {
         --use-names \
         --threads ${task.cpus} \
         $unmapped_fastq
+    """
+}
+
+process kraken_biom {
+    publishDir "$params.outdir/kraken2/biom/", mode: 'copy'
+    container 'shaunchuah/kraken_biom'
+
+    input:
+    file(kraken2_report_files) from kraken_biom_ch.collect()
+
+    output:
+    file "collated_kraken2.biom"
+
+    script:
+    """
+    kraken-biom ${kraken2_report_files} -o collated_kraken2.biom
     """
 }
