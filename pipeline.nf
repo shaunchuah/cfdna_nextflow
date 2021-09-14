@@ -103,6 +103,7 @@ process cpgiscan {
 }
 */
 
+/*
 process cpg_count {
     publishDir "$params.outdir/cpg_count/", mode: 'copy'
     container 'shaunchuah/seqkit:v0.2'
@@ -120,6 +121,7 @@ process cpg_count {
     seqkit locate --ignore-case --only-positive-strand --pattern "CG" ${reads_file[0]} | wc -l >> ${sample_id}_cpg_count.txt
     """
 }
+*/
 
 process bowtie2 {
     container 'biocontainers/bowtie2:v2.4.1_cv1'
