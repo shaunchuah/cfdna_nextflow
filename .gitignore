@@ -6,3 +6,4 @@ work/
 .nextflow/
 credentials.json
 reference_db/
+pipeline_dag*

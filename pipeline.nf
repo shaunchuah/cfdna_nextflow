@@ -132,7 +132,7 @@ process bowtie2 {
     file db from bowtie2_db_ch
 
     output:
-    tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch, chrM_ch
+    tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch, chrM_ch, igv_ch
 
     script:
     """
@@ -188,6 +188,27 @@ process samtools_flagstat {
     samtools flagstat -@ ${task.cpus} $sam_file > ${sample_id}_flagstat.txt
     """
 }
+
+process get_mapped_reads {
+    publishDir "$params.outdir/mapped_bam_igv/"
+    container 'biocontainers/samtools:v1.9-4-deb_cv1'
+    cpus "$params.cpus".toInteger()
+    tag "$sample_id"
+
+    input:
+    tuple val(sample_id), file(sam_file) from igv_ch
+
+    output:
+    path "${sample_id}_mapped_reads.bam"
+    path "${sample_id}_mapped_reads.bam.bai"
+
+    script:
+    """
+    samtools view -@ ${task.cpus} -bF 4 $sam_file | samtools sort - > ${sample_id}_mapped_reads.bam
+    samtools index -@ ${task.cpus} ${sample_id}_mapped_reads.bam
+    """
+}
+
 
 process get_unmapped_reads {
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
