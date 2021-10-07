@@ -62,7 +62,7 @@ println """\
          .stripIndent()
 
 reads = Channel.fromFilePairs(params.reads)
-reads.into { fastqc_reads; reads_for_alignment; reads_for_cpg_count }
+reads.into { fastqc_reads; reads_for_alignment; reads_for_cpg_count; reads_for_direct_kraken2 }
 
 
 process fastqc_run {
@@ -293,5 +293,34 @@ process kraken_biom {
     script:
     """
     kraken-biom ${kraken2_report_files} -o collated_kraken2.biom
+    """
+}
+
+
+process run_kraken2_direct {
+    publishDir "$params.outdir/kraken2_direct/report/", mode: 'copy', pattern: "*_kraken2report.txt"
+    publishDir "$params.outdir/kraken2_direct/output/", pattern: "*_kraken2output.txt"
+    container 'staphb/kraken2:2.1.2-no-db'
+    cpus "$params.cpus".toInteger()
+    tag "$sample_id - kraken2_direct"
+
+    input:
+    tuple val(sample_id), file(reads_file) from reads_for_direct_kraken2
+    file kraken2_db from kraken2_db_ch
+
+    output:
+    file '*_kraken2report.txt'
+    file '*_kraken2output.txt'
+
+    script:
+    """
+    tar -xvf $kraken2_db
+    kraken2 \
+        --db . \
+        --report ${sample_id}_kraken2report.txt \
+        --output ${sample_id}_kraken2output.txt \
+        --use-names \
+        --threads ${task.cpus} \
+        ${reads_file[0]}
     """
 }
