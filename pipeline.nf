@@ -81,24 +81,6 @@ process fastqc_run {
     """
 }
 
-process multiqc {
-    publishDir "$params.outdir/multiqc/", mode: 'copy'
-    container 'ewels/multiqc:v1.12'
-    tag "MultiQC"
-
-    input:
-    file ('fastqc/*') from fastqc_results.collect().ifEmpty([])
-
-    output:
-    file "multiqc_report.html" into multiqc_report
-    file "multiqc_data"
-
-    script:
-    """
-    multiqc .
-    """
-}
-
 
 process run_kraken2_direct {
     publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: "*_kraken2report.txt"
