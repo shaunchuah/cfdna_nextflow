@@ -145,9 +145,21 @@ Azure credentials stored and read from credentials.json. Copy sample_credentials
 
 #### 2. Running the pipeline
 ```
-nextflow pipeline.nf -resume -profile az
+nextflow pipeline.nf -resume -profile production
 ```
 
 ## Pipeline Updates
 
 13 April 2022: Moved old version into `archive_2021`. New pipeline streamlined. Input reads are split into QC and kraken2 steps.
+
+## Using Linux Screen to Launch Nextflow Orchestration
+
+`screen` to start a session
+`Ctrl+A D` to detach from a session
+`screen -r` to resume a session
+
+## Running Test pipeline
+
+```
+nextflow pipeline.nf -resume -profile test
+```
