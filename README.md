@@ -148,23 +148,6 @@ Azure credentials stored and read from credentials.json. Copy sample_credentials
 nextflow pipeline.nf -resume -profile az
 ```
 
-### Google Cloud Execution
+## Pipeline Updates
 
-This is for reference here.
-Basic tutorial here: https://cloud.google.com/life-sciences/docs/tutorials/nextflow
-
-* To edit cloud configuration open nextflow.config and edit the desired settings under the profile section
-* You will need to create a json key and download it
-
-#### 1. Set the environment variables
-```
-export NXF_MODE=google
-export GOOGLE_APPLICATION_CREDENTIALS=<path to key_filename.json>
-```
-
-Tip: Consider adding the above environment variables to the .bashrc file
-
-#### 2. Running the pipeline
-```
-nextflow pipeline.nf -resume -profile gls
-```
+13 April 2022: Moved old version into `archive_2021`. New pipeline streamlined. Input reads are split into QC and kraken2 steps.

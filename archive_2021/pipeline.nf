@@ -1,16 +1,8 @@
 #!/usr/bin/env nextflow
 
 /*
-==================
-PIPELINE STRUCTURE
-==================
-Illumina reads
-    |- Fastqc --> MultiQC
-    |- Kraken2 --> Kraken_biom
+PIPELINE INSTRUCTIONS HERE
 
-==================
-PIPELINE INSTRUCTIONS
-==================
 This pipeline has been constructured for illumina sequencing reads
 Sample Folder structure <path for reads here>/<sample_id>/<contains fastq.gz read1 and read2>
 
@@ -21,25 +13,36 @@ nextflow run pipeline.nf -resume -profile az
 Azure VM Reference:
 Standard_E8a_v4 8cpus 64gb ram
 Standard_D16_v3 16cpus 64gb ram
+*/
 
+// PIPELINE PARAMETERS HERE
+
+// Input Files
+params.reads = "$baseDir/data/*/*_{R1,R2}_*.fastq.gz"
+
+// Report Directory
+params.outdir = 'reports'
+
+// Reference Genomes
+params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
+bowtie2_db_ch = Channel.value(file("${params.bowtie2_reference_index}"))
+/* 
 Top tip: For azure storage - it does not support folders.
 You have to put the file directly in the root of the container otherwise azure throws errors.
 So I have zipped up the bowtie2 reference index and placed it at az://<container>/<tar.gz bowtie2 index>
 */
 
-// PIPELINE PARAMETERS HERE (OVERRIDE WITH CONFIG)
-// Input Files
-params.reads = "$baseDir/data/*/*_{R1,R2}_*.fastq.gz"
-// Report Directory
-params.outdir = 'reports'
-// Reference Genomes
-// params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
 // CPU configuration
 params.cpus = 4
+
 // Kraken2 Database
+// By default, the full database is linked here which requires 64GB of RAM
+// URL for the 8GB DB = "s3://genome-idx/kraken/k2_standard_8gb_20210517.tar.gz"
 params.kraken2_db = "$baseDir/reference_db/k2_standard_16gb_20201202.tar.gz"
+kraken2_db_ch = Channel.value(file("${params.kraken2_db}"))
 
-
+params.metaphlan_db = "$baseDir/reference_db/metaphlan_db.tar.gz"
+metaphlan_db_ch = Channel.value(file("${params.metaphlan_db}"))
 
 println """\
          ===================================
@@ -52,16 +55,15 @@ println """\
          -----------------------------------
          PIPELINE REFERENCE DATABASES
          -----------------------------------
+         bowtie2 db   : ${params.bowtie2_reference_index}
          kraken2 db   : ${params.kraken2_db}
+         metaphlan_db : ${params.metaphlan_db}
          """
          .stripIndent()
 
-// SET UP INPUT CHANNELS
-// bowtie2_db_ch = Channel.value(file("${params.bowtie2_reference_index}"))
-kraken2_db_ch = Channel.value(file("${params.kraken2_db}"))
 reads = Channel.fromFilePairs(params.reads)
+reads.into { fastqc_reads; reads_for_alignment; reads_for_cpg_count; reads_for_direct_kraken2 }
 
-reads.into { fastqc_reads; reads_for_direct_kraken2 }
 
 process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
@@ -81,70 +83,46 @@ process fastqc_run {
     """
 }
 
-process multiqc {
-    publishDir "$params.outdir/multiqc/", mode: 'copy'
-    container 'ewels/multiqc:v1.12'
-    tag "MultiQC"
+/*
+process cpgiscan {
+    publishDir "$params.outdir/cpgiscan/", mode: 'copy'
+    container 'shaunchuah/cpgiscan'
+    tag "$sample_id - CpGIScan"
 
     input:
-    file ('fastqc/*') from fastqc_results.collect().ifEmpty([])
+    tuple val(sample_id), file(reads_file) from reads_for_cpgiscan
 
     output:
-    file "multiqc_report.html" into multiqc_report
-    file "multiqc_data"
+    file "${sample_id}_cpgiscan.txt"
 
     script:
     """
-    multiqc .
+    gunzip -c ${reads_file[0]} > ${sample_id}.fastq
+    cpgiscan -G ${sample_id}_cpgiscan.txt ${sample_id}.fastq
     """
 }
-
-
-process run_kraken2_direct {
-    publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: "*_kraken2report.txt"
-    publishDir "$params.outdir/kraken2/output/", pattern: "*_kraken2output.txt"
-    container 'staphb/kraken2:2.1.2-no-db'
-    cpus "$params.cpus".toInteger()
-    tag "$sample_id - kraken2_direct"
-
-    input:
-    tuple val(sample_id), file(reads_file) from reads_for_direct_kraken2
-    file kraken2_db from kraken2_db_ch
-
-    output:
-    file '*_kraken2report.txt' into kraken_biom_ch
-    file '*_kraken2output.txt'
-
-    script:
-    """
-    tar -xvf $kraken2_db
-    kraken2 \
-        --db . \
-        --report ${sample_id}_kraken2report.txt \
-        --output ${sample_id}_kraken2output.txt \
-        --use-names \
-        --threads ${task.cpus} \
-        ${reads_file[0]}
-    """
-}
-
-process kraken_biom {
-    publishDir "$params.outdir/kraken2/biom/", mode: 'copy'
-    container 'shaunchuah/kraken_biom'
-
-    input:
-    file(kraken2_report_files) from kraken_biom_ch.collect()
-
-    output:
-    file "collated_kraken2.biom"
-
-    script:
-    """
-    kraken-biom ${kraken2_report_files} -o collated_kraken2.biom
-    """
-}
+*/
 
 /*
+process cpg_count {
+    publishDir "$params.outdir/cpg_count/", mode: 'copy'
+    container 'shaunchuah/seqkit:v0.2'
+    tag "$sample_id - CpG Count"
+
+    input:
+    tuple val(sample_id), file(reads_file) from reads_for_cpg_count
+
+    output:
+    file "${sample_id}_cpg_count.txt"
+
+    script:
+    """
+    echo "Raw CpG Read Count for $sample_id" > ${sample_id}_cpg_count.txt
+    seqkit locate --ignore-case --only-positive-strand --pattern "CG" ${reads_file[0]} | wc -l >> ${sample_id}_cpg_count.txt
+    """
+}
+*/
+
 process bowtie2 {
     container 'biocontainers/bowtie2:v2.4.1_cv1'
     cpus "$params.cpus".toInteger()
@@ -248,4 +226,101 @@ process get_unmapped_reads {
     samtools view -@ ${task.cpus} -bf 4 $sam_file | samtools fastq -@ ${task.cpus} - > ${sample_id}_unmapped_reads.fastq
     """
 }
-*/
+
+process run_metaphlan {
+    publishDir "$params.outdir/metaphlan/", mode: 'copy'
+    container 'biobakery/metaphlan:3.0.7'
+    cpus "$params.cpus".toInteger()
+    tag "$sample_id - metaphlan"
+    
+    input:
+    tuple val(sample_id), file(unmapped_fastq) from metaphlan_ch
+    file metaphlan_db from metaphlan_db_ch
+
+    output:
+    path "${sample_id}_metaphlan_profile.txt"
+
+    script:
+    """
+    tar -xvf $metaphlan_db
+    metaphlan $unmapped_fastq \
+        --bowtie2db metaphlan_db/ \
+        -x mpa_v30_CHOCOPhlAn_201901 \
+        --nproc ${task.cpus} \
+        --input_type fastq \
+        -o ${sample_id}_metaphlan_profile.txt
+    """ 
+}
+
+process run_kraken2 {
+    publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: "*_kraken2report.txt"
+    publishDir "$params.outdir/kraken2/output/", pattern: "*_kraken2output.txt"
+    container 'staphb/kraken2:2.1.2-no-db'
+    cpus "$params.cpus".toInteger()
+    tag "$sample_id - kraken2"
+
+    input:
+    tuple val(sample_id), file(unmapped_fastq) from kraken2_ch
+    file kraken2_db from kraken2_db_ch
+
+    output:
+    file '*_kraken2report.txt' into kraken_biom_ch
+    file '*_kraken2output.txt'
+
+    script:
+    """
+    tar -xvf $kraken2_db
+    kraken2 \
+        --db . \
+        --report ${sample_id}_kraken2report.txt \
+        --output ${sample_id}_kraken2output.txt \
+        --use-names \
+        --threads ${task.cpus} \
+        $unmapped_fastq
+    """
+}
+
+process kraken_biom {
+    publishDir "$params.outdir/kraken2/biom/", mode: 'copy'
+    container 'shaunchuah/kraken_biom'
+
+    input:
+    file(kraken2_report_files) from kraken_biom_ch.collect()
+
+    output:
+    file "collated_kraken2.biom"
+
+    script:
+    """
+    kraken-biom ${kraken2_report_files} -o collated_kraken2.biom
+    """
+}
+
+
+process run_kraken2_direct {
+    publishDir "$params.outdir/kraken2_direct/report/", mode: 'copy', pattern: "*_kraken2report.txt"
+    publishDir "$params.outdir/kraken2_direct/output/", pattern: "*_kraken2output.txt"
+    container 'staphb/kraken2:2.1.2-no-db'
+    cpus "$params.cpus".toInteger()
+    tag "$sample_id - kraken2_direct"
+
+    input:
+    tuple val(sample_id), file(reads_file) from reads_for_direct_kraken2
+    file kraken2_db from kraken2_db_ch
+
+    output:
+    file '*_kraken2report.txt'
+    file '*_kraken2output.txt'
+
+    script:
+    """
+    tar -xvf $kraken2_db
+    kraken2 \
+        --db . \
+        --report ${sample_id}_kraken2report.txt \
+        --output ${sample_id}_kraken2output.txt \
+        --use-names \
+        --threads ${task.cpus} \
+        ${reads_file[0]}
+    """
+}
