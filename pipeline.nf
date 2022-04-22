@@ -7,6 +7,7 @@ PIPELINE STRUCTURE
 Illumina reads
     |- Fastqc --> MultiQC
     |- Kraken2 --> Kraken_biom
+    |- Bowtie2 against GRCh38 no-alt https://benlangmead.github.io/aws-indexes/bowtie --> samtools ChrM, samtools flagstat
 
 ==================
 PIPELINE INSTRUCTIONS
@@ -38,7 +39,9 @@ params.outdir = 'reports'
 params.cpus = 4
 // Kraken2 Database
 params.kraken2_db = "$baseDir/reference_db/k2_standard_16gb_20201202.tar.gz"
-
+// Reference Genomes
+params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
+bowtie2_db_ch = Channel.value(file("${params.bowtie2_reference_index}"))
 
 
 println """\
@@ -53,6 +56,7 @@ println """\
          PIPELINE REFERENCE DATABASES
          -----------------------------------
          kraken2 db   : ${params.kraken2_db}
+         bowtie2 db   : ${params.bowtie2_reference_index}
          """
          .stripIndent()
 
@@ -61,7 +65,7 @@ println """\
 kraken2_db_ch = Channel.value(file("${params.kraken2_db}"))
 reads = Channel.fromFilePairs(params.reads)
 
-reads.into { fastqc_reads; reads_for_direct_kraken2 }
+reads.into { fastqc_reads; reads_for_direct_kraken2; reads_for_alignment}
 
 process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
@@ -126,7 +130,7 @@ process kraken_biom {
     """
 }
 
-/*
+
 process bowtie2 {
     container 'biocontainers/bowtie2:v2.4.1_cv1'
     cpus "$params.cpus".toInteger()
@@ -136,12 +140,12 @@ process bowtie2 {
     file db from bowtie2_db_ch
 
     output:
-    tuple val(sample_id), file('*.sam') into aligned_ch, stats_ch, chrM_ch, igv_ch
+    tuple val(sample_id), file('*.sam') into stats_ch, chrM_ch
 
     script:
     """
     tar -xvf $db
-    bowtie2 -t -p ${task.cpus} -x bowtie2/GRCh38_bowtie2 -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
+    bowtie2 -t -p ${task.cpus} -x GRCh38_noalt_as -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
     """
 }
 
@@ -193,6 +197,7 @@ process samtools_flagstat {
     """
 }
 
+/*
 process get_mapped_reads {
     publishDir "$params.outdir/mapped_bam_igv/"
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
