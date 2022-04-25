@@ -72,7 +72,7 @@ println """\
 kraken2_db_ch = Channel.value(file("${params.kraken2_db}"))
 reads = Channel.fromFilePairs(params.reads)
 
-reads.into { fastqc_reads; reads_for_direct_kraken2; reads_for_alignment}
+reads.into { fastqc_reads; reads_for_direct_kraken2; reads_for_alignment; reads_for_mito_db}
 
 process fastqc_run {
     publishDir "$params.outdir/fastqc/$sample_id/", mode: 'copy'
@@ -346,7 +346,7 @@ process bowtie2_mitodb {
     cpus "$params.cpus".toInteger()
 
     input:
-    tuple val(sample_id), file(reads_file) from reads_for_alignment
+    tuple val(sample_id), file(reads_file) from reads_for_mito_db
     file db from bowtie2_mitodb_ch
 
     output:
