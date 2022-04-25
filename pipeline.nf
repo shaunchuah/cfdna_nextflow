@@ -7,7 +7,11 @@ PIPELINE STRUCTURE
 Illumina reads
     |- Fastqc --> MultiQC
     |- Kraken2 --> Kraken_biom
-    |- Bowtie2 against GRCh38 no-alt https://benlangmead.github.io/aws-indexes/bowtie --> samtools ChrM, samtools flagstat
+    |- Bowtie2 against GRCh38 no-alt https://benlangmead.github.io/aws-indexes/bowtie
+        |- samtools_chr_counts
+        |- samtools flagstat
+        |- get_unmapped_reads --> Kraken2_unmapped_only --> Kraken_biom_unmapped
+    |- Bowtie2 against different mitochondrial DB https://www.ncbi.nlm.nih.gov/nuccore/NC_012920.1?report=fasta --> samtools_flagstat_mito
 
 ==================
 PIPELINE INSTRUCTIONS
@@ -43,6 +47,8 @@ params.kraken2_db = "$baseDir/reference_db/k2_standard_16gb_20201202.tar.gz"
 params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
 bowtie2_db_ch = Channel.value(file("${params.bowtie2_reference_index}"))
 
+params.bowtie2_mito_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
+bowtie2_mitodb_ch = Channel.value(file("${params.bowtie2_mito_index}"))
 
 println """\
          ===================================
@@ -57,6 +63,7 @@ println """\
          -----------------------------------
          kraken2 db   : ${params.kraken2_db}
          bowtie2 db   : ${params.bowtie2_reference_index}
+         bt2 mito db  : ${params.bowtie2_mito_index}
          """
          .stripIndent()
 
@@ -140,18 +147,19 @@ process bowtie2 {
     file db from bowtie2_db_ch
 
     output:
-    tuple val(sample_id), file('*.sam') into stats_ch, chrM_ch
+    tuple val(sample_id), file('*.sam') into stats_ch, chrM_ch, aligned_ch
 
     script:
     """
     tar -xvf $db
-    bowtie2 -t -p ${task.cpus} -x GRCh38_noalt_as -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
+    bowtie2 -t -p ${task.cpus} -x GRCh38_noalt_as/GRCh38_noalt_as -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
     """
 }
 
-process samtools_chrM {
+process samtools_chr_counts {
     publishDir "$params.outdir/samtools_chrM/", mode: 'copy', pattern: "*_chrM.txt"
     publishDir "$params.outdir/samtools_idxstats/", mode: 'copy', pattern: "*_idxstats.tsv"
+    publishDir "$params.outdir/mitochondrial_bam_files/", mode: 'copy', pattern: "*_chrM.bam"
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
     cpus "$params.cpus".toInteger()
     tag "$sample_id"
@@ -160,22 +168,73 @@ process samtools_chrM {
     tuple val(sample_id), file(sam_file) from chrM_ch
 
     output:
-    path "${sample_id}_chrM.txt"
+    path "${sample_id}_chr_counts.txt"
     path "${sample_id}_idxstats.tsv"
+    path "${sample_id}_chrM.bam"
 
     script:
     """
     samtools view -@ ${task.cpus} -S -b $sam_file | samtools sort - > temp.bam
     samtools index -@ ${task.cpus} temp.bam
 
-    echo "${sample_id} - Total Reads vs Mitochondrial Reads" > ${sample_id}_chrM.txt
-    echo "Total Reads:" >> ${sample_id}_chrM.txt
-    samtools view -@ ${task.cpus} -c temp.bam >> ${sample_id}_chrM.txt
+    echo "${sample_id} - Counts by Chromosome" > ${sample_id}_chr_counts.txt
 
-    echo "Mitochondrial Reads:" >> ${sample_id}_chrM.txt
-    samtools view -@ ${task.cpus} -c temp.bam chrM >> ${sample_id}_chrM.txt
-
+    echo "total" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam >> ${sample_id}_chr_counts.txt
+    echo "chrM" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chrM >> ${sample_id}_chr_counts.txt
+    echo "chr1" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr1 >> ${sample_id}_chr_counts.txt
+    echo "chr2" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr2 >> ${sample_id}_chr_counts.txt
+    echo "chr3" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr3 >> ${sample_id}_chr_counts.txt
+    echo "chr4" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr4 >> ${sample_id}_chr_counts.txt
+    echo "chr5" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr5 >> ${sample_id}_chr_counts.txt
+    echo "chr6" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr6 >> ${sample_id}_chr_counts.txt
+    echo "chr7" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr7 >> ${sample_id}_chr_counts.txt
+    echo "chr8" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr8 >> ${sample_id}_chr_counts.txt
+    echo "chr9" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr9 >> ${sample_id}_chr_counts.txt
+    echo "chr10" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr10 >> ${sample_id}_chr_counts.txt
+    echo "chr11" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr11 >> ${sample_id}_chr_counts.txt
+    echo "chr12" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr12 >> ${sample_id}_chr_counts.txt
+    echo "chr13" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr13 >> ${sample_id}_chr_counts.txt
+    echo "chr14" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr14 >> ${sample_id}_chr_counts.txt
+    echo "chr15" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr15 >> ${sample_id}_chr_counts.txt
+    echo "chr16" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr16 >> ${sample_id}_chr_counts.txt
+    echo "chr17" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr17 >> ${sample_id}_chr_counts.txt
+    echo "chr18" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr18 >> ${sample_id}_chr_counts.txt
+    echo "chr19" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr19 >> ${sample_id}_chr_counts.txt
+    echo "chr20" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr20 >> ${sample_id}_chr_counts.txt
+    echo "chr21" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr21 >> ${sample_id}_chr_counts.txt
+    echo "chr22" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chr22 >> ${sample_id}_chr_counts.txt
+    echo "chrX" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chrX >> ${sample_id}_chr_counts.txt
+    echo "chrY" >> ${sample_id}_chr_counts.txt
+    samtools view -@ ${task.cpus} -c temp.bam chrY >> ${sample_id}_chr_counts.txt
+    
     samtools idxstats -@ ${task.cpus} temp.bam > ${sample_id}_idxstats.tsv
+
+    samtools view -@ ${task.cpus} -b temp.bam chrM > ${sample_id}_chrM.bam
     """
 }
 
@@ -218,6 +277,7 @@ process get_mapped_reads {
     """
 }
 
+*/
 
 process get_unmapped_reads {
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
@@ -228,11 +288,91 @@ process get_unmapped_reads {
     tuple val(sample_id), file(sam_file) from aligned_ch
 
     output:
-    tuple val(sample_id), path("${sample_id}_unmapped_reads.fastq") into metaphlan_ch, kraken2_ch
+    tuple val(sample_id), path("${sample_id}_unmapped_reads.fastq") into kraken2_unmapped_ch
 
     script:
     """
     samtools view -@ ${task.cpus} -bf 4 $sam_file | samtools fastq -@ ${task.cpus} - > ${sample_id}_unmapped_reads.fastq
     """
 }
-*/
+
+process kraken2_unmapped {
+    publishDir "$params.outdir/kraken2_unmapped_only/report/", mode: 'copy', pattern: "*_kraken2report.txt"
+    publishDir "$params.outdir/kraken2_unmapped_only/output/", pattern: "*_kraken2output.txt"
+    container 'staphb/kraken2:2.1.2-no-db'
+    cpus "$params.cpus".toInteger()
+    tag "$sample_id - kraken2_direct"
+
+    input:
+    tuple val(sample_id), file(reads_file) from kraken2_unmapped
+    file kraken2_db from kraken2_db_ch
+
+    output:
+    file '*_unmapped_kraken2report.txt' into kraken_biom_unmapped_ch
+    file '*_unmapped_kraken2output.txt'
+
+    script:
+    """
+    tar -xvf $kraken2_db
+    kraken2 \
+        --db . \
+        --report ${sample_id}_unmapped_kraken2report.txt \
+        --output ${sample_id}_unmapped_kraken2output.txt \
+        --use-names \
+        --threads ${task.cpus} \
+        ${reads_file[0]}
+    """
+}
+
+// For use in PhyloSeq
+process kraken_biom_unmapped {
+    publishDir "$params.outdir/kraken2_unmapped_only/biom/", mode: 'copy'
+    container 'shaunchuah/kraken_biom'
+
+    input:
+    file(kraken2_report_files) from kraken_biom_unmapped_ch.collect()
+
+    output:
+    file "collated_kraken2_unmapped_only.biom"
+
+    script:
+    """
+    kraken-biom ${kraken2_report_files} -o collated_kraken2_unmapped_only.biom
+    """
+}
+
+process bowtie2_mitodb {
+    container 'biocontainers/bowtie2:v2.4.1_cv1'
+    cpus "$params.cpus".toInteger()
+
+    input:
+    tuple val(sample_id), file(reads_file) from reads_for_alignment
+    file db from bowtie2_mitodb_ch
+
+    output:
+    tuple val(sample_id), file('*.sam') into mito_stats_ch
+
+    script:
+    """
+    tar -xvf $db
+    bowtie2 -t -p ${task.cpus} -x human_mito_db/human_mito_db -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
+    """
+}
+
+process samtools_flagstat_mito {
+    publishDir "$params.outdir/samtools_flagstat_mito/"
+    container 'biocontainers/samtools:v1.9-4-deb_cv1'
+    cpus "$params.cpus".toInteger()
+    tag "$sample_id"
+
+    input:
+    tuple val(sample_id), file(sam_file) from mito_stats_ch
+
+    output:
+    path "${sample_id}_flagstat_mito.txt"
+
+    script:
+    """
+    samtools flagstat -@ ${task.cpus} $sam_file > ${sample_id}_flagstat_mito.txt
+    """
+}
