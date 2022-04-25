@@ -147,7 +147,7 @@ process bowtie2 {
     file db from bowtie2_db_ch
 
     output:
-    tuple val(sample_id), file('*.sam') into stats_ch, chrM_ch, aligned_ch
+    tuple val(sample_id), file('*.sam') into stats_ch, chr_counts_ch, aligned_ch
 
     script:
     """
@@ -157,7 +157,7 @@ process bowtie2 {
 }
 
 process samtools_chr_counts {
-    publishDir "$params.outdir/samtools_chrM/", mode: 'copy', pattern: "*_chrM.txt"
+    publishDir "$params.outdir/samtools_chr_counts/", mode: 'copy', pattern: "*_chr_counts.txt"
     publishDir "$params.outdir/samtools_idxstats/", mode: 'copy', pattern: "*_idxstats.tsv"
     publishDir "$params.outdir/mitochondrial_bam_files/", mode: 'copy', pattern: "*_chrM.bam"
     container 'biocontainers/samtools:v1.9-4-deb_cv1'
@@ -165,7 +165,7 @@ process samtools_chr_counts {
     tag "$sample_id"
 
     input:
-    tuple val(sample_id), file(sam_file) from chrM_ch
+    tuple val(sample_id), file(sam_file) from chr_counts_ch
 
     output:
     path "${sample_id}_chr_counts.txt"
