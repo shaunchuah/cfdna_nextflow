@@ -304,7 +304,7 @@ process kraken2_unmapped {
     tag "$sample_id - kraken2_direct"
 
     input:
-    tuple val(sample_id), file(reads_file) from kraken2_unmapped
+    tuple val(sample_id), file(reads_file) from kraken2_unmapped_ch
     file kraken2_db from kraken2_db_ch
 
     output:
