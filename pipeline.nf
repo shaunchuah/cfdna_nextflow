@@ -14,6 +14,11 @@ Illumina reads
     |- Bowtie2 against different mitochondrial DB https://www.ncbi.nlm.nih.gov/nuccore/NC_012920.1?report=fasta --> samtools_flagstat_mito
 
 ==================
+PIPELINE TODO
+==================
+1. Add deduplication step with GATK Picard
+
+==================
 PIPELINE INSTRUCTIONS
 ==================
 This pipeline has been constructured for illumina sequencing reads
@@ -396,137 +401,5 @@ process samtools_flagstat_mito {
     script:
     """
     samtools flagstat -@ ${task.cpus} $sam_file > ${sample_id}_flagstat_mito.txt
-    """
-}
-
-/*
-==================
-FASTP into BOWTIE2
-Deduplication step added for comparison
-==================
-*/
-process fastp {
-    publishDir "$params.outdir/fastp_reports/", mode: 'copy', pattern: "*.html"
-    container 'biocontainers/fastp:v0.20.1_cv1'
-    cpus "$params.cpus".toInteger()
-
-    input:
-    tuple val(sample_id), file(reads_file) from reads_for_fastp
-
-    output:
-    tuple val(sample_id), file('*.fastq') into fastp_bowtie2_ch
-    path "*.html"
-
-    script:
-    """
-    fastp --dedup \
-        --thread ${task.cpus} \
-        --in1 ${reads_file[0]} \
-        --in2 ${reads_file[1]} \
-        --out1 ${sample_id}_R1_fastp.fastq \
-        --out2 ${sample_id}_R2_fastp.fastq \
-        --html ${sample_id}_fastp.html \
-        --report_title "${sample_id} FastP Report"
-    """
-}
-
-
-process fastp_bowtie2 {
-    container 'biocontainers/bowtie2:v2.4.1_cv1'
-    cpus "$params.cpus".toInteger()
-
-    input:
-    tuple val(sample_id), file(reads_file) from fastp_bowtie2_ch
-    file db from bowtie2_db_ch
-
-    output:
-    tuple val(sample_id), file('*.sam') into fastp_chr_counts_ch
-
-    script:
-    """
-    tar -xvf $db
-    bowtie2 -t -p ${task.cpus} -x GRCh38_noalt_as/GRCh38_noalt_as -1 ${reads_file[0]} -2 ${reads_file[1]} -S ${sample_id}.sam 
-    """
-}
-
-process fastp_samtools_chr_counts {
-    publishDir "$params.outdir/samtools_chr_counts_fastp/", mode: 'copy', pattern: "*_chr_counts.txt"
-    publishDir "$params.outdir/samtools_idxstats_fastp/", mode: 'copy', pattern: "*_idxstats.tsv"
-    publishDir "$params.outdir/mitochondrial_bam_files_fastp/", mode: 'copy', pattern: "*_chrM.bam"
-    container 'biocontainers/samtools:v1.9-4-deb_cv1'
-    cpus "$params.cpus".toInteger()
-    tag "$sample_id"
-
-    input:
-    tuple val(sample_id), file(sam_file) from fastp_chr_counts_ch
-
-    output:
-    path "${sample_id}_chr_counts.txt"
-    path "${sample_id}_idxstats.tsv"
-    path "${sample_id}_chrM.bam"
-
-    script:
-    """
-    samtools view -@ ${task.cpus} -S -b $sam_file | samtools sort - > temp.bam
-    samtools index -@ ${task.cpus} temp.bam
-
-    echo "${sample_id} - Counts by Chromosome" > ${sample_id}_chr_counts.txt
-
-    echo "total" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam >> ${sample_id}_chr_counts.txt
-    echo "chrM" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chrM >> ${sample_id}_chr_counts.txt
-    echo "chr1" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr1 >> ${sample_id}_chr_counts.txt
-    echo "chr2" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr2 >> ${sample_id}_chr_counts.txt
-    echo "chr3" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr3 >> ${sample_id}_chr_counts.txt
-    echo "chr4" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr4 >> ${sample_id}_chr_counts.txt
-    echo "chr5" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr5 >> ${sample_id}_chr_counts.txt
-    echo "chr6" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr6 >> ${sample_id}_chr_counts.txt
-    echo "chr7" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr7 >> ${sample_id}_chr_counts.txt
-    echo "chr8" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr8 >> ${sample_id}_chr_counts.txt
-    echo "chr9" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr9 >> ${sample_id}_chr_counts.txt
-    echo "chr10" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr10 >> ${sample_id}_chr_counts.txt
-    echo "chr11" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr11 >> ${sample_id}_chr_counts.txt
-    echo "chr12" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr12 >> ${sample_id}_chr_counts.txt
-    echo "chr13" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr13 >> ${sample_id}_chr_counts.txt
-    echo "chr14" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr14 >> ${sample_id}_chr_counts.txt
-    echo "chr15" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr15 >> ${sample_id}_chr_counts.txt
-    echo "chr16" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr16 >> ${sample_id}_chr_counts.txt
-    echo "chr17" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr17 >> ${sample_id}_chr_counts.txt
-    echo "chr18" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr18 >> ${sample_id}_chr_counts.txt
-    echo "chr19" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr19 >> ${sample_id}_chr_counts.txt
-    echo "chr20" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr20 >> ${sample_id}_chr_counts.txt
-    echo "chr21" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr21 >> ${sample_id}_chr_counts.txt
-    echo "chr22" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chr22 >> ${sample_id}_chr_counts.txt
-    echo "chrX" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chrX >> ${sample_id}_chr_counts.txt
-    echo "chrY" >> ${sample_id}_chr_counts.txt
-    samtools view -@ ${task.cpus} -c temp.bam chrY >> ${sample_id}_chr_counts.txt
-    
-    samtools idxstats -@ ${task.cpus} temp.bam > ${sample_id}_idxstats.tsv
-
-    samtools view -@ ${task.cpus} -b temp.bam chrM > ${sample_id}_chrM.bam
     """
 }
