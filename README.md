@@ -8,6 +8,10 @@ Finally I upload the real data and switch the directories to the real input and 
 
 Test illumina data included for pipeline development in /data folder credits to https://github.com/hartwigmedical/testdata  
 
+## Overview
+
+![cfdna data processing overview](cfdna_data_processing_overview.png)
+
 ## Installation
 
 You need Docker and Nextflow for this to work well.
