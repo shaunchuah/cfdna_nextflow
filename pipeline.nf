@@ -68,8 +68,8 @@ FASTP
 ==================
 */
 process fastp {
-    publishDir "$params.outdir/fastp/json/", mode: 'copy', pattern: '*_fastp.json'
-    publishDir "$params.outdir/fastp/html/", mode: 'copy', pattern: '*_fastp.html'
+    publishDir "$params.outdir/quality_control/fastp/json/", mode: 'copy', pattern: '*.fastp.json'
+    publishDir "$params.outdir/quality_control/fastp/html/", mode: 'copy', pattern: '*.fastp.html'
     container 'biocontainers/fastp:v0.20.1_cv1'
     cpus "$params.cpus".toInteger()
 
@@ -78,7 +78,8 @@ process fastp {
 
     output:
     tuple val(sample_id), file('*.fq.gz') into kraken2_direct_ch
-    file '*fastp.{json,html}'
+    file '*.fastp.json' into multiqc_ch
+    file '*.fastp.html'
 
     script:
     """
@@ -90,6 +91,22 @@ process fastp {
     -j ${sample_id}.fastp.json \
     -h ${sample_id}.fastp.html \
     -w ${task.cpus}
+    """
+}
+
+process multiqc {
+    publishDir "$params.outdir/quality_control/", mode: 'copy'
+    container 'ewels/multiqc:v1.12'
+
+    input:
+    file(fastp_files) from multiqc_ch.collect()
+
+    output:
+    path ('multiqc_report.html')
+
+    script:
+    """
+    multiqc .
     """
 }
 
