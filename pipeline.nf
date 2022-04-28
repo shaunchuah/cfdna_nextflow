@@ -5,18 +5,7 @@
 PIPELINE STRUCTURE
 ==================
 Illumina reads
-    |- Fastqc --> MultiQC
-    |- Kraken2 --> Kraken_biom
-    |- Bowtie2 against GRCh38 no-alt https://benlangmead.github.io/aws-indexes/bowtie
-        |- samtools_chr_counts
-        |- samtools flagstat
-        |- get_unmapped_reads --> Kraken2_unmapped_only --> Kraken_biom_unmapped
-    |- Bowtie2 against different mitochondrial DB https://www.ncbi.nlm.nih.gov/nuccore/NC_012920.1?report=fasta --> samtools_flagstat_mito
-
-==================
-PIPELINE TODO
-==================
-1. Add deduplication step with GATK Picard
+    |- Fastp --> kraken2 --> bracken --> krakentools to filter host reads --> kraken_biom
 
 ==================
 PIPELINE INSTRUCTIONS
