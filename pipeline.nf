@@ -96,7 +96,7 @@ process fastp {
 
 process multiqc {
     publishDir "$params.outdir/quality_control/", mode: 'copy'
-    container 'ewels/multiqc:v1.12'
+    container 'shaunchuah/multiqc'
 
     input:
     file(fastp_files) from multiqc_ch.collect()
