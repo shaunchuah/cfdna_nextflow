@@ -101,6 +101,7 @@ RAW READ FILES AGAINST KRAKEN2
 process kraken2_bracken_direct {
     publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: '*_kraken2.report'
     publishDir "$params.outdir/kraken2/bracken/", mode: 'copy', pattern: '*_bracken.tsv'
+    publishDir "$params.outdir/kraken2/filtered_bracken/", mode: 'copy', pattern: '*.filtered.bracken'
     container 'shaunchuah/kraken_bracken'
     cpus "$params.cpus".toInteger()
 
