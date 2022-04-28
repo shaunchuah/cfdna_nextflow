@@ -2,36 +2,37 @@
 
 /*
 ==================
-PIPELINE STRUCTURE
+CFDNA_NEXTFLOW PIPELINE STRUCTURE
 ==================
 Illumina reads
     |- Fastp --> kraken2 --> bracken --> krakentools to filter host reads --> kraken_biom
+            |- MultiQC
 
 ==================
 PIPELINE INSTRUCTIONS
 ==================
 This pipeline has been constructured for illumina sequencing reads
-Sample Folder structure <path for reads here>/<sample_id>/<contains fastq.gz read1 and read2>
+Sample input folder structure <path for reads here>/<sample_id>/<contains fastq.gz read1 and read2>
 
-nextflow run pipeline.nf --reads <s3/az/gc path to reads folder> --outdir <s3/az/gc path to reports folder>
-alternatively open up the config for the profiles and you can run
-nextflow run pipeline.nf -resume -profile az
+nextflow run pipeline.nf -resume -profile test
+nextflow run pipeline.nf -resume -profile production
 
 Azure VM Reference:
 Standard_E8a_v4 8cpus 64gb ram
 Standard_D16_v3 16cpus 64gb ram
 
-Top tip: For azure storage - it does not support folders.
+Top tip:
+Azure storage does not support transferring of folders into containers in the traditional sense.
 You have to put the file directly in the root of the container otherwise azure throws errors.
 So I have zipped up the bowtie2 reference index and placed it at az://<container>/<tar.gz bowtie2 index>
+Unzip the index once inside the container.
 */
 
-// PIPELINE PARAMETERS HERE (OVERRIDE WITH CONFIG)
-// Input Files
+// ==================
+// PIPELINE PARAMETERS
+// ==================
 params.reads = "$baseDir/data/*/*_{R1,R2}_*.fastq.gz"
-// Report Directory
 params.outdir = 'reports'
-//
 params.cpus = 16
 params.kraken2_db = "$baseDir/reference_db/k2_standard_16gb_20201202.tar.gz"
 params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
@@ -58,14 +59,14 @@ println """\
 bowtie2_db_ch = Channel.value(file("${params.bowtie2_reference_index}"))
 bowtie2_mitodb_ch = Channel.value(file("${params.bowtie2_mito_index}"))
 kraken2_db_ch = Channel.value(file("${params.kraken2_db}"))
-
 reads = Channel.fromFilePairs(params.reads)
 reads.into { fastp_reads; second_line }
 
 /*
 ==================
-FASTP
+FASTP into MULTIQC
 ==================
+Removes Illumina adapters and performs QC checks.
 */
 process fastp {
     publishDir "$params.outdir/quality_control/fastp/json/", mode: 'copy', pattern: '*.fastp.json'
@@ -112,13 +113,16 @@ process multiqc {
 
 /*
 ==================
-RAW READ FILES AGAINST KRAKEN2
+KRAKEN2 DIRECT
 ==================
+Runs all sequences into kraken2 to allow for seqeunces to classify against human
+Kraken2 output then run into bracken to perform abundance estimation (default species level)
+Bracken output file is then filtered to remove human reads to allow for alpha diversity analysis
 */
 process kraken2_bracken_direct {
     publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: '*_kraken2.report'
     publishDir "$params.outdir/kraken2/bracken/", mode: 'copy', pattern: '*_bracken.tsv'
-    publishDir "$params.outdir/kraken2/filtered_bracken/", mode: 'copy', pattern: '*.filtered.bracken'
+    publishDir "$params.outdir/kraken2/filtered_bracken/", mode: 'copy', pattern: '*.filtered.bracken.tsv'
     container 'shaunchuah/kraken_bracken'
     cpus "$params.cpus".toInteger()
 
@@ -129,7 +133,8 @@ process kraken2_bracken_direct {
     output:
     tuple val(sample_id), file('*_kraken2.report')
     tuple val(sample_id), file('*_bracken.tsv')
-    tuple val(sample_id), file('*.filtered.bracken') into kraken_biom_ch
+    tuple val(sample_id), file('*.filtered.bracken.tsv')
+    tuple val(sample_id), file('*_bracken_kraken2.report') into kraken_biom_ch
     file '*_kraken2.output'
 
     script:
@@ -146,13 +151,17 @@ process kraken2_bracken_direct {
     bracken \
         -d . \
         -i ${sample_id}_kraken2.report \
-        -o ${sample_id}_bracken.tsv
+        -o ${sample_id}_bracken.tsv \
+        -w ${sample_id}_bracken_kraken2.report
+        -r 100 \
+        -l S \
+        -t 5
     
-    python /krakentools/filter_bracken.out.py -i ${sample_id}_bracken.tsv -o ${sample_id}.filtered.bracken --exclude 9606
+    python /krakentools/filter_bracken.out.py -i ${sample_id}_bracken.tsv -o ${sample_id}.filtered.bracken.tsv --exclude 9606
     """
 }
 
-process convert_kraken_to_biom {
+process convert_to_biom {
     publishDir "$params.outdir/kraken2/biom/", mode: 'copy'
     container 'shaunchuah/kraken_biom'
 
@@ -160,11 +169,10 @@ process convert_kraken_to_biom {
     file(kraken2_report_files) from kraken_biom_ch.collect()
 
     output:
-    file 'collated_kraken2_direct.biom'
+    file 'collated_kraken_bracken.biom'
 
     script:
     """
-    kraken-biom ${kraken2_report_files} -o collated_kraken2_direct.biom
+    kraken-biom ${kraken2_report_files} -o collated_kraken_bracken.biom
     """
 }
-
