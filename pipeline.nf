@@ -141,7 +141,7 @@ process kraken2_bracken_direct {
         --output ${sample_id}_kraken2.output \
         --use-names \
         --threads ${task.cpus} \
-        ${reads_file[0]}
+        --paired ${reads_file[0]} ${reads_file[1]}
 
     bracken \
         -d . \
