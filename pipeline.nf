@@ -152,7 +152,7 @@ process kraken2_bracken_direct {
         -d . \
         -i ${sample_id}_kraken2.report \
         -o ${sample_id}_bracken.tsv \
-        -w ${sample_id}_bracken_kraken2.report
+        -w ${sample_id}_bracken_kraken2.report \
         -r 100 \
         -l S \
         -t 5
