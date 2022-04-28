@@ -98,9 +98,10 @@ process fastp {
 RAW READ FILES AGAINST KRAKEN2
 ==================
 */
-process kraken2_direct {
-    publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: '*_kraken2report.txt'
-    container 'staphb/kraken2:2.1.2-no-db'
+process kraken2_bracken_direct {
+    publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: '*_kraken2.report'
+    publishDir "$params.outdir/kraken2/bracken/", mode: 'copy', pattern: '*_bracken.tsv'
+    container 'shaunchuah/kraken_bracken'
     cpus "$params.cpus".toInteger()
 
     input:
@@ -108,53 +109,28 @@ process kraken2_direct {
     file kraken2_db from kraken2_db_ch
 
     output:
-    tuple val(sample_id), file('*_kraken2report.txt') into bracken_ch
-    file '*_kraken2output.txt'
+    tuple val(sample_id), file('*_kraken2.report')
+    tuple val(sample_id), file('*_bracken.tsv')
+    tuple val(sample_id), file('*.filtered.bracken') into kraken_biom_ch
+    file '*_kraken2.output'
 
     script:
     """
     tar -xvf $kraken2_db
     kraken2 \
         --db . \
-        --report ${sample_id}_kraken2report.txt \
-        --output ${sample_id}_kraken2output.txt \
+        --report ${sample_id}_kraken2.report \
+        --output ${sample_id}_kraken2.output \
         --use-names \
         --threads ${task.cpus} \
         ${reads_file[0]}
-    """
-}
 
-process bracken_direct {
-    publishDir "$params.outdir/kraken2/bracken/", mode: 'copy', pattern: '*.bracken'
-    container 'shaunchuah/bracken'
-
-    input:
-    tuple val(sample_id), file(kraken2report) from bracken_ch
-    file kraken2_db from kraken2_db_ch
-
-    output:
-    tuple val(sample_id), file('*.bracken') into filter_bracken_ch
-
-    script:
-    """
-    tar -xvf $kraken2_db
-    bracken -d . -i $kraken2report -o ${sample_id}.bracken
-    """
-}
-
-process filter_bracken_host {
-    publishDir "$params.outdir/kraken2/filtered_bracken/", mode: 'copy', pattern: '*.bracken'
-    container 'shaunchuah/krakentools'
-
-    input:
-    tuple val(sample_id), file(bracken_file) from filter_bracken_ch
-
-    output:
-    tuple val(sample_id), file('*.filtered.bracken') into kraken_biom_ch
-
-    script:
-    """
-    python /krakentools/filter_bracken.out.py -i $bracken_file -o ${sample_id}.filtered.bracken
+    bracken \
+        -d . \
+        -i ${sample_id}_kraken2.report \
+        -o ${sample_id}_bracken.tsv
+    
+    python /krakentools/filter_bracken.out.py -i ${sample_id}_bracken.tsv -o ${sample_id}.filtered.bracken --exclude 9606
     """
 }
 
