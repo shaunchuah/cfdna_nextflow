@@ -32,8 +32,7 @@ params.reads = "$baseDir/data/*/*_{R1,R2}_*.fastq.gz"
 // Report Directory
 params.outdir = 'reports'
 //
-params.cpus = 8
-params.kraken_cpus = 16
+params.cpus = 16
 params.kraken2_db = "$baseDir/reference_db/k2_standard_16gb_20201202.tar.gz"
 params.bowtie2_reference_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
 params.bowtie2_mito_index = "$baseDir/reference_db/bowtie2/bt2_index.tar.gz"
@@ -61,7 +60,7 @@ bowtie2_mitodb_ch = Channel.value(file("${params.bowtie2_mito_index}"))
 kraken2_db_ch = Channel.value(file("${params.kraken2_db}"))
 
 reads = Channel.fromFilePairs(params.reads)
-reads.into { fastp_reads }
+reads.into { fastp_reads; second_line }
 
 /*
 ==================
@@ -73,7 +72,6 @@ process fastp {
     publishDir "$params.outdir/fastp/html/", mode: 'copy', pattern: '*_fastp.html'
     container 'biocontainers/fastp:v0.20.1_cv1'
     cpus "$params.cpus".toInteger()
-    queue 'standard'
 
     input:
     tuple val(sample_id), file(reads_file) from fastp_reads
@@ -103,8 +101,7 @@ RAW READ FILES AGAINST KRAKEN2
 process kraken2_direct {
     publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: '*_kraken2report.txt'
     container 'staphb/kraken2:2.1.2-no-db'
-    cpus "$params.kraken_cpus".toInteger()
-    queue 'kraken'
+    cpus "$params.cpus".toInteger()
 
     input:
     tuple val(sample_id), file(reads_file) from kraken2_direct_ch
@@ -130,7 +127,6 @@ process kraken2_direct {
 process bracken_direct {
     publishDir "$params.outdir/kraken2/bracken/", mode: 'copy', pattern: '*.bracken'
     container 'shaunchuah/bracken'
-    queue 'kraken'
 
     input:
     tuple val(sample_id), file(kraken2report) from bracken_ch
@@ -149,7 +145,6 @@ process bracken_direct {
 process filter_bracken_host {
     publishDir "$params.outdir/kraken2/filtered_bracken/", mode: 'copy', pattern: '*.bracken'
     container 'shaunchuah/krakentools'
-    queue 'standard'
 
     input:
     tuple val(sample_id), file(bracken_file) from filter_bracken_ch
@@ -166,7 +161,6 @@ process filter_bracken_host {
 process convert_kraken_to_biom {
     publishDir "$params.outdir/kraken2/biom/", mode: 'copy'
     container 'shaunchuah/kraken_biom'
-    queue 'standard'
 
     input:
     file(kraken2_report_files) from kraken_biom_ch.collect()
