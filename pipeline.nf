@@ -213,7 +213,7 @@ process bowtie2_grch38 {
     samtools sort -@ ${task.cpus} > ${sample_id}.bam
 
     samtools flagstat -@ ${task.cpus} ${sample_id}.bam > ${sample_id}_flagstat.txt
-    
+
     samtools index -@ ${task.cpus} ${sample_id}.bam
     samtools idxstats ${sample_id}.bam | cut -f 1,3 > ${sample_id}.chr_counts.txt
     """
@@ -240,7 +240,9 @@ process bowtie2_mito {
     -x human_mito_db/human_mito_db \
     -1 ${reads_file[0]} \
     -2 ${reads_file[1]} | \
-    samtools view -@ ${task.cpus} -b > ${sample_id}.bam
+    samblaster -r | \
+    samtools view -@ ${task.cpus} -b | \
+    samtools sort -@ ${task.cpus} > ${sample_id}.bam
 
     samtools flagstat -@ ${task.cpus} ${sample_id}.bam > ${sample_id}_flagstat_mito.txt
     """
