@@ -290,7 +290,7 @@ process get_unmapped_reads {
 
     script:
     """
-    samtools view -@ ${task.cpus} -bf 4 $bam_file | samtools fastq -@ ${task.cpus} -1 ${sample_id}_unmapped.R1.fq -2 ${sample_id}_unmapped.R2.fq
+    samtools view -@ ${task.cpus} -bf 4 $bam_file | samtools fastq -@ ${task.cpus} - -1 ${sample_id}_unmapped.R1.fq -2 ${sample_id}_unmapped.R2.fq
     """
 }
 
