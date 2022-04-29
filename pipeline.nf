@@ -78,7 +78,7 @@ process fastp {
     tuple val(sample_id), file(reads_file) from fastp_reads
 
     output:
-    tuple val(sample_id), file('*.fq.gz') into kraken2_direct_ch
+    tuple val(sample_id), file('*.fq.gz') into kraken2_direct_ch, reads_for_alignment
     file '*.fastp.json' into multiqc_ch
     file '*.fastp.html'
 
@@ -176,3 +176,43 @@ process convert_to_biom {
     kraken-biom ${kraken2_report_files} -o collated_kraken_bracken.biom
     """
 }
+
+/*
+==================
+BOWTIE2 ALIGNMENT AGAINST GRCH38
+takes fastp output then aligns
+deduplication using samblaster
+sorted sam file as output
+==================
+*/
+
+process bowtie2 {
+    publishDir "$params.outdir/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat.txt'
+    container 'shaunchuah/bowtie2_samblaster_samtools'
+    cpus "$params.cpus".toInteger()
+
+    input:
+    tuple val(sample_id), path(reads_file) from reads_for_alignment
+    path db from bowtie2_db_ch
+
+    output:
+    tuple val(sample_id), path('*.bam') into stats_ch, chr_counts_ch, aligned_ch
+    path('*_flagstat.txt')
+
+    script:
+    """
+    tar -xvf $db
+    bowtie2 \
+    -t -p ${task.cpus} \
+    -x GRCh38_noalt_as/GRCh38_noalt_as \
+    -1 ${reads_file[0]} \
+    -2 ${reads_file[1]} | \
+    samblaster | \
+    samtools view -@ ${task.cpus} -b | \
+    samtools sort -@ ${task.cpus} > ${sample_id}.bam
+
+    samtools flagstat -@ ${task.cpus} ${sample_id}.bam > ${sample_id}_flagstat.txt
+    """
+}
+
+// ?next into bamCoverage
