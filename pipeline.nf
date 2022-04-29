@@ -219,7 +219,7 @@ process bowtie2_grch38 {
 }
 
 process bowtie2_mito {
-    publishDir "$params.outdir/mito/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat.txt'
+    publishDir "$params.outdir/mito/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat_mito.txt'
     container 'shaunchuah/bowtie2_samblaster_samtools'
     cpus "$params.cpus".toInteger()
 
@@ -229,7 +229,7 @@ process bowtie2_mito {
 
     output:
     tuple val(sample_id), path('*.bam')
-    path('*_flagstat.txt')
+    path('*_flagstat_mito.txt')
 
     script:
     """
@@ -240,7 +240,8 @@ process bowtie2_mito {
     -1 ${reads_file[0]} \
     -2 ${reads_file[1]} | \
     samblaster | \
-    samtools view -@ ${task.cpus} -b > ${sample_id}.bam
+    samtools view -@ ${task.cpus} -b | \
+    samtools sort -@ ${task.cpus} | > ${sample_id}.bam
 
     samtools flagstat -@ ${task.cpus} ${sample_id}.bam > ${sample_id}_flagstat_mito.txt
     """
