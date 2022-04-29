@@ -237,8 +237,7 @@ process bowtie2_mito {
     -1 ${reads_file[0]} \
     -2 ${reads_file[1]} | \
     samblaster | \
-    samtools view -@ ${task.cpus} -b | \
-    samtools sort -@ ${task.cpus} > ${sample_id}.bam
+    samtools view -@ ${task.cpus} -b > ${sample_id}.bam
 
     samtools flagstat -@ ${task.cpus} ${sample_id}.bam > ${sample_id}_flagstat_mito.txt
     """
