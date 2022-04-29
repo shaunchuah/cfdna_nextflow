@@ -187,9 +187,7 @@ sorted sam file as output
 */
 
 process bowtie2_grch38 {
-    publishDir "$params.outdir/grch38/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat.txt'
-    publishDir "$params.outdir/grch38/chr_counts/", mode: 'copy', pattern: '*.chr_counts.txt'
-    publishDir "$params.outdir/grch38/idxstats/", mode: 'copy', pattern: '*.idxstats.txt'
+    publishDir "$params.outdir/grch38/flagstat/", mode: 'copy', pattern: '*_flagstat.txt'
     container 'shaunchuah/bowtie2_samblaster_samtools'
     cpus "$params.cpus".toInteger()
 
@@ -198,7 +196,7 @@ process bowtie2_grch38 {
     path db from bowtie2_db_ch
 
     output:
-    tuple val(sample_id), path('*.bam') into deeptools_ch, chr_counts_ch
+    tuple val(sample_id), path('*.bam') into deeptools_ch, chr_counts_ch, unmapped_ch
     path('*_flagstat.txt')
 
     script:
@@ -217,29 +215,6 @@ process bowtie2_grch38 {
     """
 }
 
-process chr_counts {
-    publishDir "$params.outdir/grch38/chr_counts/", mode: 'copy', pattern: "*_chr_counts.tsv"
-    publishDir "$params.outdir/grch38/idxstats/", mode: 'copy', pattern: "*_idxstats.tsv"
-    publishDir "$params.outdir/grch38/mito_bam/", mode: 'copy', pattern: "*_chrM.bam"
-    container 'biocontainers/samtools:v1.9-4-deb_cv1'
-    cpus "$params.cpus".toInteger()
-
-    input:
-    tuple val(sample_id), file(bam_file) from chr_counts_ch
-
-    output:
-    path "${sample_id}_chr_counts.tsv"
-    path "${sample_id}_idxstats.tsv"
-    path "${sample_id}_chrM.bam"
-
-    script:
-    """
-    samtools index -@ ${task.cpus} ${bam_file}
-    samtools idxstats -@ ${task.cpus} ${bam_file} | cut -f 1,3 > ${sample_id}_chr_counts.tsv
-    samtools idxstats -@ ${task.cpus} ${bam_file} > ${sample_id}_idxstats.tsv
-    samtools view -@ ${task.cpus} -b ${bam_file} chrM > ${sample_id}_chrM.bam
-    """
-}
 
 process bowtie2_mito {
     publishDir "$params.outdir/mito/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat_mito.txt'
@@ -275,6 +250,107 @@ process bowtie2_mito {
 POST ALIGNMENT ANALYSIS STEPS - GRCh38
 ==================
 */
+
+process chr_counts {
+    publishDir "$params.outdir/grch38/idxstats/", mode: 'copy', pattern: "*_idxstats.tsv"
+    publishDir "$params.outdir/grch38/mito_bam/", mode: 'copy', pattern: "*_chrM.bam"
+    container 'biocontainers/samtools:v1.9-4-deb_cv1'
+    cpus "$params.cpus".toInteger()
+
+    input:
+    tuple val(sample_id), file(bam_file) from chr_counts_ch
+
+    output:
+    path "${sample_id}_idxstats.tsv"
+    path "${sample_id}_chrM.bam"
+
+    script:
+    """
+    samtools index -@ ${task.cpus} ${bam_file}
+    samtools idxstats -@ ${task.cpus} ${bam_file} > ${sample_id}_idxstats.tsv
+    samtools view -@ ${task.cpus} -b ${bam_file} chrM > ${sample_id}_chrM.bam
+    """
+}
+
+/*
+==================
+FILTER UNMAPPED READS TO KRAKEN2
+==================
+*/
+
+process get_unmapped_reads {
+    container 'biocontainers/samtools:v1.9-4-deb_cv1'
+    cpus "$params.cpus".toInteger()
+
+    input:
+    tuple val(sample_id), file(bam_file) from unmapped_ch
+
+    output:
+    tuple val(sample_id), path("*.fq") into kraken2_unmapped_ch
+
+    script:
+    """
+    samtools view -@ ${task.cpus} -bf 4 $bam_file | samtools fastq -@ ${task.cpus} -1 ${sample_id}_unmapped.R1.fq -2 ${sample_id}_unmapped.R2.fq
+    """
+}
+
+process kraken2_bracken_unmapped {
+    publishDir "$params.outdir/kraken2_unmapped/report/", mode: 'copy', pattern: '*_kraken2.report'
+    publishDir "$params.outdir/kraken2_unmapped/bracken/", mode: 'copy', pattern: '*_bracken.tsv'
+    publishDir "$params.outdir/kraken2_unmapped/filtered_bracken/", mode: 'copy', pattern: '*.filtered.bracken.tsv'
+    container 'shaunchuah/kraken_bracken'
+    cpus "$params.cpus".toInteger()
+
+    input:
+    tuple val(sample_id), file(reads_file) from kraken2_unmapped_ch
+    file kraken2_db from kraken2_db_ch
+
+    output:
+    tuple val(sample_id), file('*_kraken2.report')
+    tuple val(sample_id), file('*_bracken.tsv')
+    tuple val(sample_id), file('*.filtered.bracken.tsv')
+    tuple val(sample_id), file('*_bracken_kraken2.report') into unmapped_kraken_biom_ch
+    file '*_kraken2.output'
+
+    script:
+    """
+    tar -xvf $kraken2_db
+    kraken2 \
+        --db . \
+        --report ${sample_id}_kraken2.report \
+        --output ${sample_id}_kraken2.output \
+        --use-names \
+        --threads ${task.cpus} \
+        --paired ${reads_file[0]} ${reads_file[1]}
+
+    bracken \
+        -d . \
+        -i ${sample_id}_kraken2.report \
+        -o ${sample_id}_bracken.tsv \
+        -w ${sample_id}_bracken_kraken2.report \
+        -r 100 \
+        -l S \
+        -t 5
+    
+    python /krakentools/filter_bracken.out.py -i ${sample_id}_bracken.tsv -o ${sample_id}.filtered.bracken.tsv --exclude 9606
+    """
+}
+
+process unmapped_convert_to_biom {
+    publishDir "$params.outdir/kraken2_unmapped/biom/", mode: 'copy'
+    container 'shaunchuah/kraken_biom'
+
+    input:
+    file(kraken2_report_files) from unmapped_kraken_biom_ch.collect()
+
+    output:
+    file 'collated_kraken_bracken_unmapped.biom'
+
+    script:
+    """
+    kraken-biom ${kraken2_report_files} -o collated_kraken_bracken_unmapped.biom
+    """
+}
 
 /*
 ==================
