@@ -189,6 +189,7 @@ sorted sam file as output
 process bowtie2_grch38 {
     publishDir "$params.outdir/grch38/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat.txt'
     publishDir "$params.outdir/grch38/chr_counts/", mode: 'copy', pattern: '*.chr_counts.txt'
+    publishDir "$params.outdir/grch38/idxstats/", mode: 'copy', pattern: '*.idxstats.txt'
     container 'shaunchuah/bowtie2_samblaster_samtools'
     cpus "$params.cpus".toInteger()
 
@@ -216,6 +217,7 @@ process bowtie2_grch38 {
 
     samtools index -@ ${task.cpus} ${sample_id}.bam
     samtools idxstats ${sample_id}.bam | cut -f 1,3 > ${sample_id}.chr_counts.txt
+    samtools idxstats ${sample_id}.bam > ${sample_id}.idxstats.txt
     """
 }
 
