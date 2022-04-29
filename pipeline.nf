@@ -198,7 +198,7 @@ process bowtie2_grch38 {
     path db from bowtie2_db_ch
 
     output:
-    tuple val(sample_id), path('*.bam') into deeptools_ch
+    tuple val(sample_id), path('*.bam') into deeptools_ch, chr_counts_ch
     path('*_flagstat.txt')
 
     script:
@@ -214,10 +214,30 @@ process bowtie2_grch38 {
     samtools sort -@ ${task.cpus} > ${sample_id}.bam
 
     samtools flagstat -@ ${task.cpus} ${sample_id}.bam > ${sample_id}_flagstat.txt
+    """
+}
 
-    samtools index -@ ${task.cpus} ${sample_id}.bam
-    samtools idxstats ${sample_id}.bam | cut -f 1,3 > ${sample_id}.chr_counts.txt
-    samtools idxstats ${sample_id}.bam > ${sample_id}.idxstats.txt
+process chr_counts {
+    publishDir "$params.outdir/grch38/chr_counts/", mode: 'copy', pattern: "*_chr_counts.tsv"
+    publishDir "$params.outdir/grch38/idxstats/", mode: 'copy', pattern: "*_idxstats.tsv"
+    publishDir "$params.outdir/grch38/mito_bam/", mode: 'copy', pattern: "*_chrM.bam"
+    container 'biocontainers/samtools:v1.9-4-deb_cv1'
+    cpus "$params.cpus".toInteger()
+
+    input:
+    tuple val(sample_id), file(bam_file) from chr_counts_ch
+
+    output:
+    path "${sample_id}_chr_counts.tsv"
+    path "${sample_id}_idxstats.tsv"
+    path "${sample_id}_chrM.bam"
+
+    script:
+    """
+    samtools index -@ ${task.cpus} ${bam_file}
+    samtools idxstats -@ ${task.cpus} ${bam_file} | cut -f 1,3 > ${sample_id}_chr_counts.tsv
+    samtools idxstats -@ ${task.cpus} ${bam_file} > ${sample_id}_idxstats.tsv
+    samtools view -@ ${task.cpus} -b ${bam_file} chrM > ${sample_id}_chrM.bam
     """
 }
 
