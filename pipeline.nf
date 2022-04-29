@@ -78,7 +78,7 @@ process fastp {
     tuple val(sample_id), file(reads_file) from fastp_reads
 
     output:
-    tuple val(sample_id), file('*.fq.gz') into kraken2_direct_ch, reads_for_alignment
+    tuple val(sample_id), file('*.fq.gz') into kraken2_direct_ch, reads_for_GRCh38, reads_for_mito
     file '*.fastp.json' into multiqc_ch
     file '*.fastp.html'
 
@@ -179,24 +179,24 @@ process convert_to_biom {
 
 /*
 ==================
-BOWTIE2 ALIGNMENT AGAINST GRCH38
+BOWTIE2 ALIGNMENT AGAINST GRCH38 & MITO
 takes fastp output then aligns
 deduplication using samblaster
 sorted sam file as output
 ==================
 */
 
-process bowtie2 {
-    publishDir "$params.outdir/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat.txt'
+process bowtie2_grch38 {
+    publishDir "$params.outdir/grch38/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat.txt'
     container 'shaunchuah/bowtie2_samblaster_samtools'
     cpus "$params.cpus".toInteger()
 
     input:
-    tuple val(sample_id), path(reads_file) from reads_for_alignment
+    tuple val(sample_id), path(reads_file) from reads_for_GRCh38
     path db from bowtie2_db_ch
 
     output:
-    tuple val(sample_id), path('*.bam') into stats_ch, chr_counts_ch, aligned_ch
+    tuple val(sample_id), path('*.bam') into deeptools_ch
     path('*_flagstat.txt')
 
     script:
@@ -215,4 +215,43 @@ process bowtie2 {
     """
 }
 
-// ?next into bamCoverage
+process bowtie2_mito {
+    publishDir "$params.outdir/mito/samtools_flagstat/", mode: 'copy', pattern: '*_flagstat.txt'
+    container 'shaunchuah/bowtie2_samblaster_samtools'
+    cpus "$params.cpus".toInteger()
+
+    input:
+    tuple val(sample_id), path(reads_file) from reads_for_mito
+    path db from bowtie2_mitodb_ch
+
+    output:
+    tuple val(sample_id), path('*.bam')
+    path('*_flagstat.txt')
+
+    script:
+    """
+    tar -xvf $db
+    bowtie2 \
+    -t -p ${task.cpus} \
+    -x human_mito_db/human_mito_db \
+    -1 ${reads_file[0]} \
+    -2 ${reads_file[1]} | \
+    samblaster | \
+    samtools view -@ ${task.cpus} -b | \
+    samtools sort -@ ${task.cpus} > ${sample_id}.bam
+
+    samtools flagstat -@ ${task.cpus} ${sample_id}.bam > ${sample_id}_flagstat_mito.txt
+    """
+}
+
+/*
+==================
+POST ALIGNMENT ANALYSIS STEPS - GRCh38
+==================
+*/
+
+/*
+==================
+POST ALIGNMENT ANALYSIS STEPS - Mito
+==================
+*/
