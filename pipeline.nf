@@ -120,7 +120,8 @@ Kraken2 output then run into bracken to perform abundance estimation (default sp
 Bracken output file is then filtered to remove human reads to allow for alpha diversity analysis
 */
 process kraken2_bracken_direct {
-    publishDir "$params.outdir/kraken2/report/", mode: 'copy', pattern: '*_kraken2.report'
+    publishDir "$params.outdir/kraken2/k2report/", mode: 'copy', pattern: '*_kraken2.report'
+    publishDir "$params.outdir/kraken2/brackenk2report/", mode: 'copy', pattern: '*_brackenk2.report'
     publishDir "$params.outdir/kraken2/bracken/", mode: 'copy', pattern: '*_bracken.tsv'
     publishDir "$params.outdir/kraken2/filtered_bracken/", mode: 'copy', pattern: '*.filtered.bracken.tsv'
     container 'shaunchuah/kraken_bracken'
@@ -132,6 +133,7 @@ process kraken2_bracken_direct {
 
     output:
     tuple val(sample_id), file('*_kraken2.report')
+    tuple val(sample_id), file('*_brackenk2.report')
     tuple val(sample_id), file('*_bracken.tsv')
     tuple val(sample_id), file('*.filtered.bracken.tsv')
     tuple val(sample_id), file('*_bracken_kraken2.report') into kraken_biom_ch
@@ -152,10 +154,9 @@ process kraken2_bracken_direct {
         -d . \
         -i ${sample_id}_kraken2.report \
         -o ${sample_id}_bracken.tsv \
-        -w ${sample_id}_bracken_kraken2.report \
+        -w ${sample_id}_brackenk2.report \
         -r 100 \
         -l S \
-        -t 5
     
     python /krakentools/filter_bracken.out.py -i ${sample_id}_bracken.tsv -o ${sample_id}.filtered.bracken.tsv --exclude 9606
     """
@@ -295,7 +296,8 @@ process get_unmapped_reads {
 }
 
 process kraken2_bracken_unmapped {
-    publishDir "$params.outdir/kraken2_unmapped/report/", mode: 'copy', pattern: '*_kraken2.report'
+    publishDir "$params.outdir/kraken2_unmapped/k2report/", mode: 'copy', pattern: '*_kraken2.report'
+    publishDir "$params.outdir/kraken2/brackenk2report/", mode: 'copy', pattern: '*_brackenk2.report'
     publishDir "$params.outdir/kraken2_unmapped/bracken/", mode: 'copy', pattern: '*_bracken.tsv'
     publishDir "$params.outdir/kraken2_unmapped/filtered_bracken/", mode: 'copy', pattern: '*.filtered.bracken.tsv'
     container 'shaunchuah/kraken_bracken'
@@ -307,6 +309,7 @@ process kraken2_bracken_unmapped {
 
     output:
     tuple val(sample_id), file('*_kraken2.report')
+    tuple val(sample_id), file('*_brackenk2.report')
     tuple val(sample_id), file('*_bracken.tsv')
     tuple val(sample_id), file('*.filtered.bracken.tsv')
     tuple val(sample_id), file('*_bracken_kraken2.report') into unmapped_kraken_biom_ch
@@ -327,10 +330,9 @@ process kraken2_bracken_unmapped {
         -d . \
         -i ${sample_id}_kraken2.report \
         -o ${sample_id}_bracken.tsv \
-        -w ${sample_id}_bracken_kraken2.report \
+        -w ${sample_id}_brackenk2.report \
         -r 100 \
         -l S \
-        -t 5
     
     python /krakentools/filter_bracken.out.py -i ${sample_id}_bracken.tsv -o ${sample_id}.filtered.bracken.tsv --exclude 9606
     """
