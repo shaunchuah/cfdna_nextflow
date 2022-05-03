@@ -298,7 +298,7 @@ process get_unmapped_reads {
 
 process kraken2_bracken_unmapped {
     publishDir "$params.outdir/kraken2_unmapped/k2report/", mode: 'copy', pattern: '*_kraken2.report'
-    publishDir "$params.outdir/kraken2/brackenk2report/", mode: 'copy', pattern: '*_brackenk2.report'
+    publishDir "$params.outdir/kraken2_unmapped/brackenk2report/", mode: 'copy', pattern: '*_brackenk2.report'
     publishDir "$params.outdir/kraken2_unmapped/bracken/", mode: 'copy', pattern: '*_bracken.tsv'
     publishDir "$params.outdir/kraken2_unmapped/filtered_bracken/", mode: 'copy', pattern: '*.filtered.bracken.tsv'
     container 'shaunchuah/kraken_bracken'
