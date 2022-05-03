@@ -157,6 +157,7 @@ process kraken2_bracken_direct {
         -w ${sample_id}_brackenk2.report \
         -r 100 \
         -l S \
+        -t 0
     
     python /krakentools/filter_bracken.out.py -i ${sample_id}_bracken.tsv -o ${sample_id}.filtered.bracken.tsv --exclude 9606
     """
@@ -333,6 +334,7 @@ process kraken2_bracken_unmapped {
         -w ${sample_id}_brackenk2.report \
         -r 100 \
         -l S \
+        -t 0
     
     python /krakentools/filter_bracken.out.py -i ${sample_id}_bracken.tsv -o ${sample_id}.filtered.bracken.tsv --exclude 9606
     """
