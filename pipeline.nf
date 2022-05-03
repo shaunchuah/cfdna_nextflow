@@ -133,10 +133,9 @@ process kraken2_bracken_direct {
 
     output:
     tuple val(sample_id), file('*_kraken2.report')
-    tuple val(sample_id), file('*_brackenk2.report')
     tuple val(sample_id), file('*_bracken.tsv')
     tuple val(sample_id), file('*.filtered.bracken.tsv')
-    tuple val(sample_id), file('*_bracken_kraken2.report') into kraken_biom_ch
+    tuple val(sample_id), file('*_brackenk2.report') into kraken_biom_ch
     file '*_kraken2.output'
 
     script:
@@ -310,10 +309,9 @@ process kraken2_bracken_unmapped {
 
     output:
     tuple val(sample_id), file('*_kraken2.report')
-    tuple val(sample_id), file('*_brackenk2.report')
     tuple val(sample_id), file('*_bracken.tsv')
     tuple val(sample_id), file('*.filtered.bracken.tsv')
-    tuple val(sample_id), file('*_bracken_kraken2.report') into unmapped_kraken_biom_ch
+    tuple val(sample_id), file('*_brackenk2.report') into unmapped_kraken_biom_ch
     file '*_kraken2.output'
 
     script:
